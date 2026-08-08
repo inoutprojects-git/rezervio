@@ -1,6 +1,7 @@
 // ── APP ROOT COMPONENT ────────────────────────────────────────────────────────
 
 var h = React.createElement;
+var Fragment = React.Fragment;
 var useState = React.useState;
 var useEffect = React.useEffect;
 var useMemo = React.useMemo;
