@@ -117,24 +117,5 @@ function waUrl(phone) {
 
 function smsUrl(phone) { return 'sms:' + phone; }
 
-// ── VALIDATION HELPERS ────────────────────────────────────────────────────────
-function isValidCNP(cnp) {
-  if (!cnp || cnp.length !== 13 || !/^\d+$/.test(cnp)) return false;
-  var weights = [2, 7, 9, 1, 4, 6, 3, 5, 8, 2, 7, 9];
-  var sum = 0;
-  for (var i = 0; i < 12; i++) sum += parseInt(cnp[i]) * weights[i];
-  var ctrl = sum % 11;
-  if (ctrl === 10) ctrl = 1;
-  return parseInt(cnp[12]) === ctrl;
-}
-
-function isValidCUI(cuiRaw) {
-  var cui = cuiRaw.toUpperCase().replace(/^RO/, '').padStart(9, '0');
-  if (!/^\d{9}$/.test(cui)) return false;
-  var weights = [7, 5, 3, 2, 1, 7, 5, 3, 2];
-  var sum = 0;
-  for (var i = 0; i < 9; i++) sum += parseInt(cui[i]) * weights[i];
-  var rest = (sum * 10) % 11;
-  if (rest === 10) rest = 0;
-  return parseInt(cui[8]) === rest;
-}
+// NOTA: isValidCNP si isValidCUI sunt definite in app.js (langa BillingInfo component)
+// pentru a evita duplicarea — acolo e versiunea completa folosita de formular.
