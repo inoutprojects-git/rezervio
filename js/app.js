@@ -1,40 +1,38 @@
-// ── APP ROOT COMPONENT ────────────────────────────────────────────────────────
-
+// ── APP ROOT + REACT HOOKS ──────────────────────────────────────────────────────
 var h = React.createElement;
-var Fragment = React.Fragment;
 var useState = React.useState;
 var useEffect = React.useEffect;
+var useCallback = React.useCallback;
 var useMemo = React.useMemo;
+var Fragment = React.Fragment;
+var createRoot = ReactDOM.createRoot;
 
 function App() {
-  // State management — toți hook-urile la început (React rule)
   var ls = useState(true); var loading = ls[0], setLoading = ls[1];
   var ss = useState('online'); var sync = ss[0], setSync = ss[1];
   var ts = useState('rez'); var tab = ts[0], setTab = ts[1];
-  var rs = useState([]); var reservations = rs[0], setReservations = rs[1];
-  var rms = useState(DEF_ROOMS); var rooms = rms[0], setRooms = rms[1];
-  var srcs = useState(DEF_SRC); var sources = srcs[0], setSources = srcs[1];
-  var rps = useState({}); var roomPrices = rps[0], setRoomPrices = rps[1];
-  var pn = useState('Pensiunea'); var pensionName = pn[0], setPensionName = pn[1];
-  var pp = useState(null); var pensionPhoto = pp[0], setPensionPhoto = pp[1];
+  var drs = useState(false); var drawerOpen = drs[0], setDrawerOpen = drs[1];
+  var ros = useState(function() { return lc.get('p_rooms', DEF_ROOMS); }); var rooms = ros[0], setRooms = ros[1];
+  var sos = useState(function() { return lc.get('p_src', DEF_SRC); }); var sources = sos[0], setSources = sos[1];
+  var prs = useState(function() { return lc.get('p_prices', {}); }); var roomPrices = prs[0], setRoomPrices = prs[1];
+  var pns = useState(function() { return lc.get('p_name', ''); }); var pensionName = pns[0], setPensionName = pns[1];
+  var pps = useState(function() { return lc.get('p_photo', ''); }); var pensionPhoto = pps[0], setPensionPhoto = pps[1];
+  var res = useState([]); var reservations = res[0], setRes = res[1];
   var ms = useState(null); var modal = ms[0], setModal = ms[1];
-  var dsm = useState(null); var detailRes = dsm[0], setDetailRes = dsm[1];
-  var os = useState(null); var confirm = os[0], setConfirm = os[1];
-  var drw = useState(false); var drawerOpen = drw[0], setDrawerOpen = drw[1];
-  var shw = useState(false); var showRooms = shw[0], setShowRooms = shw[1];
-  var shs = useState(false); var showSrc = shs[0], setShowSrc = shs[1];
-  var shi = useState(false); var showIcal = shi[0], setShowIcal = shi[1];
-  var shp = useState(false); var showPdf = shp[0], setShowPdf = shp[1];
-  var shpr = useState(false); var showPrices = shpr[0], setShowPrices = shpr[1];
+  var cs = useState(null); var confirm = cs[0], setConfirm = cs[1];
+  var srs = useState(false); var showRooms = srs[0], setShowRooms = srs[1];
+  var sss = useState(false); var showSrc = sss[0], setShowSrc = sss[1];
+  var ics = useState(false); var showIcal = ics[0], setShowIcal = ics[1];
+  var pds = useState(false); var showPdf = pds[0], setShowPdf = pds[1];
+  var prs2 = useState(false); var showPrices = prs2[0], setShowPrices = prs2[1];
   var pss = useState(false); var showPensionSettings = pss[0], setShowPensionSettings = pss[1];
   var acs = useState(false); var showAccountSettings = acs[0], setShowAccountSettings = acs[1];
   var sms = useState(false); var showMessages = sms[0], setShowMessages = sms[1];
   var mrs = useState(null); var msgRes = mrs[0], setMsgRes = mrs[1];
   var bis = useState(null); var billingInfo = bis[0], setBillingInfo = bis[1];
   var sbi = useState(false); var showBillingInfo = sbi[0], setShowBillingInfo = sbi[1];
-  var cos = useState(false); var calOpen = cos[0], setCalOpen = cos[1];
 
-  // useEffect: update document title
+  // Titlul paginii reflecta numele pensiunii (setat din Firebase)
   useEffect(function() {
     if (pensionName) {
       document.title = pensionName + ' — Rezervario';
@@ -43,211 +41,244 @@ function App() {
     }
   }, [pensionName]);
 
-  // useEffect: listen to Firebase data
   useEffect(function() {
-    setLoading(true);
-    var offConfig = fb.on('config', function(c) {
-      if (c) {
-        setRooms(c.rooms || DEF_ROOMS);
-        setSources(c.sources || DEF_SRC);
-        setRoomPrices(c.roomPrices || {});
-        setPensionName(c.pensionName || 'Pensiunea');
-        setPensionPhoto(c.pensionPhoto || null);
-      }
-      setLoading(false);
-    });
-    var offRes = fb.on('reservations', function(r) {
-      if (r) {
-        var arr = [];
-        Object.keys(r).forEach(function(k) { arr.push(Object.assign({ id: k }, r[k])); });
-        setReservations(arr);
-      } else {
-        setReservations([]);
+    if (!firebaseDB) { setLoading(false); return; }
+    var u1 = fb.on('config', function(cfg) {
+      if (cfg) {
+        if (cfg.rooms) { setRooms(cfg.rooms); lc.set('p_rooms', cfg.rooms); }
+        if (cfg.sources) { setSources(cfg.sources); lc.set('p_src', cfg.sources); }
+        if (cfg.roomPrices) { setRoomPrices(cfg.roomPrices); lc.set('p_prices', cfg.roomPrices); }
+        if (cfg.pensionName !== undefined) { setPensionName(cfg.pensionName); lc.set('p_name', cfg.pensionName); }
+        if (cfg.pensionPhoto !== undefined) { setPensionPhoto(cfg.pensionPhoto); lc.set('p_photo', cfg.pensionPhoto); }
       }
     });
-    return function() { offConfig && offConfig(); offRes && offRes(); };
+    var u2 = fb.on('reservations', function(data) {
+      var arr = data ? Object.keys(data).map(function(id) { return Object.assign({}, data[id], { id: id }); }) : [];
+      setRes(arr); lc.set('p_res', arr); setSync('online'); setLoading(false);
+    });
+    firebaseDB.ref('.info/connected').on('value', function(snap) {
+      if (snap.val() === false) { setSync('offline'); setRes(lc.get('p_res', [])); setLoading(false); }
+      else setSync('online');
+    });
+    return function() { u1(); u2(); };
   }, []);
 
-  // useEffect: fetch billingInfo for current user
+  // Date de facturare: legate de USER (cont), nu de pensiune — separat de fb.on() de mai sus,
+  // care e mereu scopat pe pensions/{PENSION_ID}. Aici ascultam direct users/{uid}/billingInfo.
   useEffect(function() {
     var user = firebase.auth().currentUser;
-    if (user) {
-      firebaseDB.ref('users/' + user.uid + '/billingInfo').once('value', function(snap) {
-        if (snap.val()) setBillingInfo(snap.val());
-      });
-    }
+    if (!firebaseDB || !user) return;
+    var ref = firebaseDB.ref('users/' + user.uid + '/billingInfo');
+    var cb = function(snap) { setBillingInfo(snap.val() || null); };
+    ref.on('value', cb, function(err) { console.warn('billingInfo read error:', err); });
+    return function() { ref.off('value', cb); };
   }, []);
 
-  // Calculează conflicte de rezervări
+  // saveConfig face MERGE peste config-ul existent (nu overwrite), ca sa nu piarda
+  // campuri precum pensionName/pensionPhoto cand se salveaza doar camere/surse, sau invers.
+  function saveConfig(partial) {
+    setSync('syncing');
+    var merged = Object.assign({}, { rooms: rooms, sources: sources, roomPrices: roomPrices, pensionName: pensionName, pensionPhoto: pensionPhoto }, partial);
+    return fb.set('config', merged).then(function() { setSync('online'); }).catch(function(err) {
+      console.error('saveConfig error:', err);
+      setSync('error');
+      setTimeout(function() { setSync('online'); }, 4000);
+      alert('Eroare la salvare: ' + err.message);
+      throw err;
+    });
+  }
+
   var conflicts = useMemo(function() {
-    var conf = [];
-    rooms.forEach(function(room) {
-      var forRoom = reservations.filter(function(r) { return blocksRoom(r, room); });
-      for (var i = 0; i < forRoom.length; i++) {
-        for (var j = i + 1; j < forRoom.length; j++) {
-          var r1 = forRoom[i], r2 = forRoom[j];
-          if (overlaps(r1.checkIn, r1.nights || 0, r2.checkIn, r2.nights || 0)) {
-            conf.push({ room: room, from: r1.checkIn });
-          }
+    var result = [];
+    for (var i = 0; i < reservations.length; i++) {
+      var a = reservations[i]; if (!a.checkIn || !a.room) continue;
+      for (var j = i + 1; j < reservations.length; j++) {
+        var b = reservations[j]; if (!b.checkIn || b.room !== a.room) continue;
+        if (overlaps(a.checkIn, a.nights, b.checkIn, b.nights)) {
+          var oS = a.checkIn > b.checkIn ? a.checkIn : b.checkIn;
+          var oE = addDays(a.checkIn, a.nights) < addDays(b.checkIn, b.nights) ? addDays(a.checkIn, a.nights) : addDays(b.checkIn, b.nights);
+          result.push({ room: a.room, a: fullName(a), b: fullName(b), from: oS, to: oE });
         }
       }
-    });
-    return conf;
-  }, [reservations, rooms]);
-
-  // Callback-uri pentru acțiuni
-  function openNew(room) { setModal({ mode: 'new', data: Object.assign({}, EMPTY_RES, { room: room || '', source: sources[0] || '' }) }); }
-  function openEdit(res) { setModal({ mode: 'edit', data: res }); }
-  function openCopy(res) { var copy = Object.assign({}, res); delete copy.id; setModal({ mode: 'new', data: copy }); }
-  function openMove(res) { setModal({ mode: 'move', data: res }); }
+    }
+    return result;
+  }, [reservations]);
 
   function saveRes(data, force) {
     if (!force && data.room && data.checkIn && data.nights) {
-      var conflict = false;
-      reservations.forEach(function(r) {
-        if (r.id !== data.id && blocksRoom(r, data.room) && overlaps(r.checkIn, r.nights, data.checkIn, data.nights)) {
-          conflict = true;
-        }
-      });
-      if (conflict) {
-        setConfirm({
-          msg: 'Overlap detectat. Continui oricum?',
-          ok: function() { saveRes(data, true); setConfirm(null); }
-        });
+      var cl = reservations.find(function(r) { return r.room === data.room && r.id !== data.id && overlaps(data.checkIn, data.nights, r.checkIn, r.nights); });
+      if (cl) {
+        setConfirm({ msg: 'Camera ' + data.room + ' e rezervata de ' + fullName(cl) + '! Salvezi totusi?', okLbl: 'Salveaza (OB)', ok: function() { setConfirm(null); saveRes(data, true); } });
         return;
       }
     }
-
     setSync('syncing');
-    var promise = data.id
-      ? fb.set('reservations/' + data.id, data)
-      : fb.push('reservations', data);
-
-    promise
-      .then(function() {
-        setSync('online');
-        setModal(null);
-        setDetailRes(null);
-        setMsgRes(null);
-      })
-      .catch(function(err) {
-        console.error('Save error:', err);
-        setSync('error');
-        alert('Eroare la salvare: ' + err.message);
-      });
+    var p;
+    if (data.id && reservations.find(function(r) { return r.id === data.id; })) {
+      var id = data.id;
+      var rest = Object.assign({}, data); delete rest.id;
+      p = fb.set('reservations/' + id, rest);
+    } else {
+      var rest2 = Object.assign({}, data); delete rest2.id;
+      p = fb.push('reservations', Object.assign(rest2, { createdAt: Date.now() }));
+    }
+    p.then(function() { setSync('online'); setModal(null); }).catch(function(err) {
+      console.error('saveRes error:', err);
+      setSync('error');
+      setTimeout(function() { setSync('online'); }, 4000);
+      alert('Eroare la salvare: ' + err.message);
+    });
   }
 
   function delRes(id, name) {
     setConfirm({
-      msg: 'Șterge rezervarea ' + name + '?',
+      msg: 'Stergi rezervarea pentru "' + name + '"?',
+      okLbl: 'Sterge',
       ok: function() {
         setSync('syncing');
-        fb.remove('reservations/' + id)
-          .then(function() { setSync('online'); setConfirm(null); })
-          .catch(function(err) { console.error('Delete error:', err); setSync('error'); });
+        fb.remove('reservations/' + id).then(function() { setSync('online'); setConfirm(null); }).catch(function(err) {
+          console.error('delRes error:', err);
+          setSync('online');
+          setConfirm(null);
+          alert('Eroare la stergere: ' + err.message);
+        });
       }
     });
   }
 
-  function saveRooms(newRooms) {
-    setSync('syncing');
-    return saveConfig({ rooms: newRooms })
-      .then(function() { setShowRooms(false); setSync('online'); })
-      .catch(function(err) { console.error('Save rooms error:', err); setSync('error'); alert('Eroare: ' + err.message); });
+  function saveRooms(newR) {
+    var del = rooms.filter(function(r) { return !newR.includes(r); });
+    var promises = del.length ? reservations.filter(function(r) { return del.includes(r.room); }).map(function(r) { return fb.remove('reservations/' + r.id); }) : [];
+    Promise.all(promises).then(function() {
+      return saveConfig({ rooms: newR });
+    }).then(function() {
+      setRooms(newR); lc.set('p_rooms', newR);
+      setShowRooms(false);
+    }).catch(function(err) {
+      console.error('saveRooms error:', err);
+      // Eroare deja afisata de saveConfig; nu inchidem modalul ca userul sa poata reincerca
+    });
   }
 
-  function saveSrc(newSrcs) {
-    setSync('syncing');
-    return saveConfig({ sources: newSrcs })
-      .then(function() { setShowSrc(false); setSync('online'); })
-      .catch(function(err) { console.error('Save sources error:', err); setSync('error'); alert('Eroare: ' + err.message); });
-  }
-
-  function savePrices(newPrices) {
-    setSync('syncing');
-    return saveConfig({ roomPrices: newPrices })
-      .then(function() { setShowPrices(false); setSync('online'); })
-      .catch(function(err) { console.error('Save prices error:', err); setSync('error'); alert('Eroare: ' + err.message); });
+  function saveSrc(newS) {
+    saveConfig({ sources: newS }).then(function() {
+      setSources(newS); lc.set('p_src', newS);
+      setShowSrc(false);
+    }).catch(function(err) {
+      console.error('saveSrc error:', err);
+    });
   }
 
   function savePensionSettings(name, photo) {
-    setSync('syncing');
-    return saveConfig({ pensionName: name, pensionPhoto: photo })
-      .then(function() { setShowPensionSettings(false); setSync('online'); })
-      .catch(function(err) { console.error('Save pension error:', err); setSync('error'); alert('Eroare: ' + err.message); });
+    return saveConfig({ pensionName: name, pensionPhoto: photo }).then(function() {
+      setPensionName(name); lc.set('p_name', name);
+      setPensionPhoto(photo); lc.set('p_photo', photo);
+    });
   }
 
+  // Datele de facturare se scriu sub users/{uid}, NU sub pensions/{PENSION_ID} — sunt legate
+  // de persoana/firma care detine contul, nu de pensiune (relevant mai ales daca un cont va
+  // putea gestiona multiple pensiuni in viitor).
   function saveBillingInfo(data) {
     var user = firebase.auth().currentUser;
-    if (!user) return Promise.reject(new Error('No user logged in'));
-    setSync('syncing');
+    if (!user) return Promise.reject(new Error('Nu esti autentificat. Reincarca pagina.'));
     return firebaseDB.ref('users/' + user.uid + '/billingInfo').set(data)
-      .then(function() { setBillingInfo(data); setShowBillingInfo(false); setSync('online'); })
-      .catch(function(err) { console.error('Save billing error:', err); setSync('error'); alert('Eroare: ' + err.message); });
-  }
-
-  function saveConfig(partial) {
-    setSync('syncing');
-    var merged = Object.assign({}, { rooms: rooms, sources: sources, roomPrices: roomPrices, pensionName: pensionName, pensionPhoto: pensionPhoto }, partial);
-    return fb.set('config', merged)
-      .then(function() {
-        setSync('online');
-      })
+      .then(function() { setBillingInfo(data); })
       .catch(function(err) {
-        console.error('Config save error:', err);
-        setSync('error');
-        alert('Eroare la salvare: ' + err.message);
+        console.error('saveBillingInfo error:', err);
         throw err;
       });
   }
 
-  function navTo(t) { setTab(t); setDrawerOpen(false); }
+  function openNew(room) { setModal({ mode: 'new', data: Object.assign({}, EMPTY_RES, { room: room || '', source: sources[0] || '' }) }); }
+  function openEdit(r) { setModal({ mode: 'edit', data: Object.assign({}, r) }); }
+  function openCopy(r) { setModal({ mode: 'copy', data: Object.assign({}, r, { id: null }) }); }
+  function openMove(r) { setModal({ mode: 'move', data: Object.assign({}, r) }); }
+
+  var syncColor = { online: '#22c55e', syncing: '#f59e0b', offline: '#ef4444', error: '#ef4444' }[sync] || '#94a3b8';
+  var syncLabel = { online: 'Sincronizat', syncing: 'Se salveaza...', offline: 'Offline', error: 'Eroare salvare' }[sync] || sync;
   var pageLabels = { rez: 'Rezervari', 'cal-month': 'Calendar lunar', 'cal-week': 'Calendar saptamanal', 'cal-custom': 'Calendar interval', stats: 'Statistici', archive: 'Istoric rezervari' };
   var calViewMap = { 'cal-month': 'month', 'cal-week': 'week', 'cal-custom': 'custom' };
 
-  // RENDER
+  if (loading) {
+    return h('div', { className: 'ldg' },
+      h('div', { className: 'spin' }),
+      h('div', { style: { fontSize: 15, fontWeight: 600, color: '#64748b' } }, 'Se incarca...')
+    );
+  }
+
   return h('div', { className: 'app' },
     // HEADER
-    h('div', { className: 'hdr' },
-      h('div', { className: 'hdr-row' },
-        h('button', { className: 'mbtn', onClick: function() { setDrawerOpen(!drawerOpen); } },
-          h('span'), h('span'), h('span')
+    h('header', { style: { background: 'linear-gradient(135deg,#1e3a5f,#1d4ed8)', color: '#fff', padding: '13px 16px', paddingTop: 'max(13px,env(safe-area-inset-top))', position: 'sticky', top: 0, zIndex: 60, boxShadow: '0 2px 16px rgba(0,0,0,.22)' } },
+      h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, maxWidth: 700, margin: '0 auto', width: '100%' } },
+        h('button', { style: { width: 40, height: 40, borderRadius: 10, background: 'rgba(255,255,255,.15)', border: '1.5px solid rgba(255,255,255,.25)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 5, flexShrink: 0 }, onClick: function() { setDrawerOpen(true); } },
+          h('span', { style: { width: 18, height: 2, background: '#fff', borderRadius: 2, display: 'block' } }),
+          h('span', { style: { width: 18, height: 2, background: '#fff', borderRadius: 2, display: 'block' } }),
+          h('span', { style: { width: 18, height: 2, background: '#fff', borderRadius: 2, display: 'block' } })
         ),
-        h('div', { className: 'hdr-mid' },
-          h('div', { className: 'hdr-tit' }, pensionPhoto ? h('img', { src: pensionPhoto, style: { width: 30, height: 30, borderRadius: 6, marginRight: 8 } }) : '🏡', ' ' + pensionName),
-          h('div', { className: 'hdr-pg' }, pageLabels[tab] || 'Aplicatie')
+        h('div', { style: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9, minWidth: 0 } },
+          pensionPhoto
+            ? h('img', { src: pensionPhoto, style: { width: 30, height: 30, borderRadius: 8, objectFit: 'cover', flexShrink: 0, border: '1.5px solid rgba(255,255,255,.35)' } })
+            : h('span', { style: { fontSize: 22, flexShrink: 0 } }, '\uD83C\uDFE1'),
+          h('div', { style: { minWidth: 0, overflow: 'hidden' } },
+            h('div', { style: { fontSize: 18, fontWeight: 800, letterSpacing: '-.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, pensionName || 'Rezervari'),
+            h('div', { style: { fontSize: 11, opacity: .7, marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, pageLabels[tab] || 'Rezervari')
+          )
         ),
-        h('div', { className: 'spill' },
-          h('span', { className: 'sdot', style: { background: sync === 'online' ? '#10b981' : sync === 'syncing' ? '#f59e0b' : '#ef4444' } }),
-          h('span', { className: 'slbl' }, sync === 'online' ? 'Sincronizat' : sync === 'syncing' ? 'Se salveaza...' : 'Offline')
-        )
-      )
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,.15)', borderRadius: 8, padding: '5px 9px', flexShrink: 0 } },
+          h('span', { style: { width: 8, height: 8, borderRadius: '50%', background: syncColor, display: 'inline-block', transition: 'background .3s', animation: sync === 'syncing' ? 'pulse .8s infinite' : 'none' } }),
+          h('span', { style: { fontSize: 11, fontWeight: 600 } }, sync === 'online' ? 'OK' : sync === 'syncing' ? '...' : 'Off')
+        ),
+        h('button', { style: { width: 40, height: 40, borderRadius: 10, background: '#2563eb', color: '#fff', fontSize: 22, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 8px rgba(37,99,235,.4)' }, onClick: function() { openNew(''); } }, '+'),
+        h('button', { title: 'Logout', style: { width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,.15)', border: '1.5px solid rgba(255,255,255,.25)', color: '#fff', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }, onClick: function() { if (confirm('Iesi din cont?')) firebase.auth().signOut(); } }, '🚪')
+      ),
     ),
-
     // DRAWER
     drawerOpen && h(Drawer, {
-      tab: tab, navTo: navTo,
-      onOpenRooms: function() { setShowRooms(true); setDrawerOpen(false); },
-      onOpenSrc: function() { setShowSrc(true); setDrawerOpen(false); },
-      onOpenIcal: function() { setShowIcal(true); setDrawerOpen(false); },
-      onOpenPdf: function() { setShowPdf(true); setDrawerOpen(false); },
-      onOpenPrices: function() { setShowPrices(true); setDrawerOpen(false); },
-      onOpenPensionSettings: function() { setShowPensionSettings(true); setDrawerOpen(false); },
-      onOpenAccountSettings: function() { setShowAccountSettings(true); setDrawerOpen(false); },
-      onOpenBillingInfo: function() { setShowBillingInfo(true); setDrawerOpen(false); },
-      onOpenMessages: function() { setMsgRes(null); setShowMessages(true); setDrawerOpen(false); },
+      tab: tab, setTab: setTab, sources: sources, rooms: rooms, conflicts: conflicts,
+      syncColor: syncColor, syncLabel: syncLabel,
+      pensionName: pensionName, pensionPhoto: pensionPhoto,
+      userEmail: (firebase.auth().currentUser && firebase.auth().currentUser.email) || '',
+      billingInfo: billingInfo,
+      pendingCount: reservations.filter(function(r){ return r.pendingConfirmation; }).length,
+      onOpenSrc: function() { setShowSrc(true); },
+      onOpenRooms: function() { setShowRooms(true); },
+      onOpenIcal: function() { setShowIcal(true); },
+      onOpenPdf: function() { setShowPdf(true); },
+      onOpenPrices: function() { setShowPrices(true); },
+      onOpenPensionSettings: function() { setShowPensionSettings(true); },
+      onOpenAccountSettings: function() { setShowAccountSettings(true); },
+      onOpenBillingInfo: function() { setShowBillingInfo(true); },
+      onOpenMessages: function() { setMsgRes(null); setShowMessages(true); },
       onClose: function() { setDrawerOpen(false); }
     }),
-
-    // TODAY BAR
+    // PENDING BANNER
+    reservations.filter(function(r){ return r.pendingConfirmation; }).length > 0 && h('div', {
+      style:{background:'#fffbeb',borderBottom:'2px solid #fbbf24',color:'#92400e',padding:'11px 16px',fontSize:14,display:'flex',gap:10,alignItems:'center',cursor:'pointer'},
+      onClick: function(){ setShowPrices(true); }
+    },
+      h('span',{style:{fontSize:20,flexShrink:0}},'\uD83D\uDD14'),
+      h('div',null,
+        h('strong',null, reservations.filter(function(r){return r.pendingConfirmation;}).length + ' cerere(i) de rezervare in asteptare'),
+        h('div',{style:{fontSize:14,marginTop:1}},'Click pentru a vedea si confirma')
+      )
+    ),
+    // OB BANNER
+    conflicts.length > 0 && h('div', { style: { background: '#fef2f2', borderBottom: '2px solid #ef4444', color: '#991b1b', padding: '12px 16px', fontSize: 14, display: 'flex', gap: 10, alignItems: 'flex-start' } },
+      h('span', { style: { fontSize: 20, flexShrink: 0 } }, '\u26A0\uFE0F'),
+      h('div', null,
+        h('strong', null, 'Overbooking detectat!'),
+        conflicts.map(function(c, i) {
+          return h('div', { key: i, style: { fontSize: 13, marginTop: 3 } }, c.room + ': ' + c.a + ' & ' + c.b + ' (' + fmt(c.from) + ' - ' + fmt(c.to) + ')');
+        })
+      )
+    ),
     h(TodayBar, { reservations: reservations, rooms: rooms, sources: sources }),
-
     // CONTENT
     tab === 'rez' && h(ResTab, { rooms: rooms, sources: sources, reservations: reservations, conflicts: conflicts, onNew: openNew, onEdit: openEdit, onCopy: openCopy, onMove: openMove, onDelete: delRes, onSendMsg: function(r) { setMsgRes(r); setShowMessages(true); } }),
     tab.startsWith('cal') && h(CalTab, { rooms: rooms, sources: sources, reservations: reservations, initView: calViewMap[tab] || 'month', onNew: openNew, onEdit: openEdit }),
     tab === 'stats' && h(StatsTab, { rooms: rooms, sources: sources, reservations: reservations }),
     tab === 'archive' && h(ArchiveTab, { rooms: rooms, sources: sources, reservations: reservations, onEdit: openEdit, onCopy: openCopy, onMove: openMove, onDelete: delRes, onSendMsg: function(r) { setMsgRes(r); setShowMessages(true); } }),
-
     // MODALS
     modal && h(ResMdl, { modal: modal, onSave: saveRes, onClose: function() { setModal(null); }, rooms: rooms, sources: sources, reservations: reservations }),
     showRooms && h(RoomMgr, { rooms: rooms, reservations: reservations, onSave: saveRooms, onClose: function() { setShowRooms(false); } }),
@@ -258,19 +289,56 @@ function App() {
     showMessages && h(MessagesMgr, { res: msgRes, pensionName: pensionName, onClose: function() { setShowMessages(false); setMsgRes(null); } }),
     showIcal && h(ICalMgr, { rooms: rooms, reservations: reservations, onClose: function() { setShowIcal(false); }, onSync: function() {} }),
     showPdf && h(PdfExport, { rooms: rooms, sources: sources, reservations: reservations, onClose: function() { setShowPdf(false); } }),
-    showPrices && h(PricesMgr, { rooms: rooms, roomPrices: roomPrices, onSave: savePrices, onClose: function() { setShowPrices(false); } }),
+    showPrices && h(PricesMgr, {
+      rooms: rooms,
+      roomPrices: roomPrices,
+      pensionName: pensionName || 'Pensiune',
+      pendingRes: reservations.filter(function(r){ return r.pendingConfirmation; }),
+      onSave: function(newPrices) {
+        saveConfig({ roomPrices: newPrices }).then(function() {
+          setRoomPrices(newPrices);
+          lc.set('p_prices', newPrices);
+        }).catch(function(err) { console.error('PricesMgr save error:', err); });
+      },
+      onConfirmPending: function(res) {
+        // Convert pending to confirmed reservation
+        var id = res.id;
+        var updated = Object.assign({}, res, { pendingConfirmation: false, status: 'occupied' });
+        delete updated.id;
+        fb.set('reservations/' + id, updated).catch(function(err) {
+          console.error('onConfirmPending error:', err);
+          alert('Eroare la confirmare: ' + err.message);
+        });
+      },
+      onDeletePending: function(id) {
+        setConfirm({
+          msg: 'Refuzi si stergi aceasta cerere de rezervare?',
+          okLbl: 'Refuza',
+          ok: function() {
+            fb.remove('reservations/' + id).catch(function(err) {
+              console.error('onDeletePending error:', err);
+              alert('Eroare la stergere: ' + err.message);
+            });
+            setConfirm(null);
+          }
+        });
+      },
+      onClose: function() { setShowPrices(false); }
+    }),
     confirm && h(Confirm, { msg: confirm.msg, okLbl: confirm.okLbl, ok: confirm.ok, onCancel: function() { setConfirm(null); } })
   );
 }
 
 function startApp() {
-  ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+  createRoot(document.getElementById('root')).render(h(App));
 }
-
+// Expus global: onAuthStateChanged (primul <script> din pagina, ruleaza inainte
+// ca acest al doilea script sa fie parsat) are nevoie sa apeleze startApp() dupa
+// ce PENSION_ID e populat. Fara window.startApp explicit, primul script ar arunca
+// "ReferenceError: startApp is not defined" (acelasi tip de bug ca firebaseAuth
+// rezolvat anterior) — eroarea oprea silentios fluxul de auth, ceea ce a dus la
+// "solutia" gresita de mai jos: apelarea necondiționata a lui startApp().
 window.startApp = startApp;
-
-// ── ALL REACT COMPONENTS (19 total) ────────────────────────────────────────────────
-
 function Confirm(props) {
   return h('div', { className: 'cov', onClick: props.onCancel },
     h('div', { className: 'cbox', onClick: function(e) { e.stopPropagation(); } },
