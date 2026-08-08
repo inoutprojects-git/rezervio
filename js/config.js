@@ -29,18 +29,18 @@ var EMPTY_RES = {
 };
 
 var PAL = [
-  { dot: '#3b82f6', light: '#dbeafe', text: '#1d4ed8' },
-  { dot: '#ec4899', light: '#fce7f3', text: '#be185d' },
-  { dot: '#f59e0b', light: '#fef3c7', text: '#92400e' },
-  { dot: '#10b981', light: '#d1fae5', text: '#065f46' },
-  { dot: '#8b5cf6', light: '#ede9fe', text: '#5b21b6' }
+  { light: '#dbeafe', text: '#1e40af', dot: '#2563eb' },
+  { light: '#dcfce7', text: '#15803d', dot: '#16a34a' },
+  { light: '#fee2e2', text: '#b91c1c', dot: '#dc2626' },
+  { light: '#fef3c7', text: '#92400e', dot: '#d97706' },
+  { light: '#f3e8ff', text: '#6b21a8', dot: '#9333ea' },
+  { light: '#ffedd5', text: '#9a3412', dot: '#ea580c' },
+  { light: '#cffafe', text: '#155e75', dot: '#0891b2' },
+  { light: '#fce7f3', text: '#9d174d', dot: '#db2777' }
 ];
 
-var SYNC_PLATFORMS = [
-  { id: 'booking', name: 'Booking.com', icon: '🔵', color: '#003580' },
-  { id: 'airbnb', name: 'Airbnb', icon: '🔴', color: '#FF385C' },
-  { id: 'other', name: 'Alta platforma (iCal generic)', icon: '🟣', color: '#7c3aed' }
-];
+// NOTA: SYNC_PLATFORMS este definit in app.js (langa ICalMgr component) —
+// versiunea completa cu importLabel/host folosita de sincronizare.
 
 // ── LOCAL CACHE HELPER ─────────────────────────────────────────────────────────
 var lc = {

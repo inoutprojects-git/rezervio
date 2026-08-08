@@ -39,82 +39,59 @@ var fb = {
   }
 };
 
-// ── DATE/TIME HELPERS ──────────────────────────────────────────────────────────
+// ── DATE/TIME HELPERS (extras exact din versiunea originala) ──────────────────
 function addDays(d, n) {
-  var date = new Date(d);
-  date.setDate(date.getDate() + n);
-  return date.toISOString().slice(0, 10);
+  if (!d) return '';
+  var x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x.toISOString().slice(0, 10);
 }
-
 function fmt(d) {
   if (!d) return '-';
-  var parts = d.split('-');
-  return parts[2] + '.' + parts[1];
+  var p = d.split('-');
+  return p[2] + '.' + p[1] + '.' + p[0];
 }
-
 function todayStr() { return new Date().toISOString().slice(0, 10); }
-
 function overlaps(s1, n1, s2, n2) {
-  var e1 = addDays(s1, n1);
-  var e2 = addDays(s2, n2);
-  return !(e1 <= s2 || e2 <= s1);
+  if (!s1 || !s2 || !n1 || !n2) return false;
+  var e1 = addDays(s1, n1), e2 = addDays(s2, n2);
+  return s1 < e2 && e1 > s2 && e1 !== s2 && e2 !== s1;
 }
-
 function nightsInRange(ci, n, from, to) {
-  var co = addDays(ci, n);
-  var max = from > ci ? from : ci;
-  var min = to < co ? to : co;
-  return max < min ? Math.floor((new Date(min) - new Date(max)) / 86400000) : 0;
+  if (!ci || !n) return 0;
+  var c = 0;
+  for (var i = 0; i < n; i++) { var d = addDays(ci, i); if (d >= from && d <= to) c++; }
+  return c;
 }
-
 function getMonthDays(y, m) {
-  var days = [];
-  for (var i = 1; i <= new Date(y, m, 0).getDate(); i++) {
-    var d = new Date(y, m - 1, i);
-    days.push(d.toISOString().slice(0, 10));
-  }
+  var days = [], d = new Date(y, m, 1);
+  while (d.getMonth() === m) { days.push(d.toISOString().slice(0, 10)); d.setDate(d.getDate() + 1); }
   return days;
 }
-
 function getWeekDays(anchor) {
-  var d = new Date(anchor);
-  var day = d.getDay();
-  var diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  var monday = new Date(d.setDate(diff)).toISOString().slice(0, 10);
+  var d = new Date(anchor), day = d.getDay(), diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
   var days = [];
-  for (var i = 0; i < 7; i++) {
-    days.push(addDays(monday, i));
-  }
+  for (var i = 0; i < 7; i++) { var x = new Date(d); x.setDate(d.getDate() + i); days.push(x.toISOString().slice(0, 10)); }
   return days;
 }
-
-// ── UTILITY HELPERS ────────────────────────────────────────────────────────────
 function uid() { return Math.random().toString(36).slice(2, 10); }
+function getCol(srcs, name) { var i = srcs.indexOf(name); return PAL[i >= 0 ? i % PAL.length : 0]; }
+function fullName(r) { return [r.firstName, r.lastName].filter(Boolean).join(' ') || '(fara nume)'; }
+function isActiveFuture(r) { return r.checkIn && addDays(r.checkIn, r.nights || 0) >= todayStr(); }
 
-function getCol(srcs, name) {
-  var i = srcs.indexOf(name);
-  return PAL[i >= 0 ? i % PAL.length : 0];
-}
 
-function fullName(r) {
-  return [r.firstName, r.lastName].filter(Boolean).join(' ') || '(fara nume)';
-}
-
-function isActiveFuture(r) {
-  return r.checkIn && addDays(r.checkIn, r.nights || 0) >= todayStr();
-}
-
-// ── URL HELPERS ────────────────────────────────────────────────────────────────
+// ── URL HELPERS (extras exact din versiunea originala) ─────────────────────────
 function phoneUrl(phone, simPhone) {
+  // tel: with phone hint for 2-SIM — if user set their own number, use it for routing
   return 'tel:' + phone;
 }
-
 function waUrl(phone) {
+  // Clean phone for WhatsApp — remove spaces, dashes, keep +
   var clean = phone.replace(/[\s\-().]/g,'');
   if (!clean.startsWith('+')) clean = '+40' + clean.replace(/^0/,'');
   return 'https://wa.me/' + clean.replace('+','');
 }
-
 function smsUrl(phone) { return 'sms:' + phone; }
 
 // NOTA: isValidCNP si isValidCUI sunt definite in app.js (langa BillingInfo component)

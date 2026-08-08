@@ -626,7 +626,6 @@ function ResDetail(props) {
         res.comments && h('div',{className:'dmod-comm'},'\uD83D\uDCAC '+res.comments),
         // Action buttons
         h('div', { className: 'dmod-acts' },
-          res.phone && h('button',{className:'dmod-act-btn',style:{background:'#dcfce7',color:'#15803d',gridColumn:'1/-1'},onClick:function(){if(props.onSendMsg)props.onSendMsg(res);props.onClose();}},h(IWa),' Trimite mesaj WhatsApp'),
           h('button',{className:'dmod-act-btn',style:{background:'#eff6ff',color:'#2563eb'},onClick:function(){props.onEdit(res);props.onClose();}},h(IEdit),' Editeaza'),
           h('button',{className:'dmod-act-btn',style:{background:'#f5f3ff',color:'#7c3aed'},onClick:function(){props.onCopy(res);props.onClose();}},h(ICopy),' Copiaza'),
           h('button',{className:'dmod-act-btn',style:{background:'#ecfeff',color:'#0891b2'},onClick:function(){props.onMove(res);props.onClose();}},h(IMove),' Muta'),
