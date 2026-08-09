@@ -146,6 +146,27 @@ function App() {
     });
   }
 
+  // Bifa "turist sosit" — muta rezervarea din "Intrari azi" in "Cazati in curs"
+  function toggleCheckedIn(res) {
+    fb.set('reservations/' + res.id + '/checkedIn', !res.checkedIn).catch(function(err) {
+      console.error('toggleCheckedIn error:', err);
+      alert('Eroare: ' + err.message);
+    });
+  }
+
+  // Bifa "camera curatata" — doar informativ, nu muta rezervarea
+  function toggleRoomCleaned(res) {
+    fb.set('reservations/' + res.id + '/roomCleaned', !res.roomCleaned).catch(function(err) {
+      console.error('toggleRoomCleaned error:', err);
+      alert('Eroare: ' + err.message);
+    });
+  }
+
+  // Salveaza fisa de client (date suplimentare pentru fisa de sosire)
+  function saveGuestDetails(resId, details) {
+    return fb.set('reservations/' + resId + '/guestDetails', details);
+  }
+
   function saveRooms(newR) {
     var del = rooms.filter(function(r) { return !newR.includes(r); });
     var promises = del.length ? reservations.filter(function(r) { return del.includes(r.room); }).map(function(r) { return fb.remove('reservations/' + r.id); }) : [];
@@ -229,7 +250,6 @@ function App() {
           h('span', { style: { width: 8, height: 8, borderRadius: '50%', background: syncColor, display: 'inline-block', transition: 'background .3s', animation: sync === 'syncing' ? 'pulse .8s infinite' : 'none' } }),
           h('span', { style: { fontSize: 11, fontWeight: 600 } }, sync === 'online' ? 'OK' : sync === 'syncing' ? '...' : 'Off')
         ),
-        h('button', { style: { width: 40, height: 40, borderRadius: 10, background: '#2563eb', color: '#fff', fontSize: 22, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 2px 8px rgba(37,99,235,.4)' }, onClick: function() { openNew(''); } }, '+'),
         h('button', { title: 'Logout', style: { width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,.15)', border: '1.5px solid rgba(255,255,255,.25)', color: '#fff', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }, onClick: function() { if (confirm('Iesi din cont?')) firebase.auth().signOut(); } }, '🚪')
       ),
     ),
@@ -275,10 +295,10 @@ function App() {
     ),
     h(TodayBar, { reservations: reservations, rooms: rooms, sources: sources }),
     // CONTENT
-    tab === 'rez' && h(ResTab, { rooms: rooms, sources: sources, reservations: reservations, conflicts: conflicts, onNew: openNew, onEdit: openEdit, onCopy: openCopy, onMove: openMove, onDelete: delRes, onSendMsg: function(r) { setMsgRes(r); setShowMessages(true); } }),
+    tab === 'rez' && h(ResTab, { rooms: rooms, sources: sources, reservations: reservations, conflicts: conflicts, onNew: openNew, onEdit: openEdit, onCopy: openCopy, onMove: openMove, onDelete: delRes, onSendMsg: function(r) { setMsgRes(r); setShowMessages(true); }, onToggleCheckedIn: toggleCheckedIn, onToggleRoomCleaned: toggleRoomCleaned, onSaveGuestDetails: saveGuestDetails, pensionName: pensionName }),
     tab.startsWith('cal') && h(CalTab, { rooms: rooms, sources: sources, reservations: reservations, initView: calViewMap[tab] || 'month', onNew: openNew, onEdit: openEdit }),
     tab === 'stats' && h(StatsTab, { rooms: rooms, sources: sources, reservations: reservations }),
-    tab === 'archive' && h(ArchiveTab, { rooms: rooms, sources: sources, reservations: reservations, onEdit: openEdit, onCopy: openCopy, onMove: openMove, onDelete: delRes, onSendMsg: function(r) { setMsgRes(r); setShowMessages(true); } }),
+    tab === 'archive' && h(ArchiveTab, { rooms: rooms, sources: sources, reservations: reservations, onEdit: openEdit, onCopy: openCopy, onMove: openMove, onDelete: delRes, onSendMsg: function(r) { setMsgRes(r); setShowMessages(true); }, onSaveGuestDetails: saveGuestDetails, pensionName: pensionName }),
     // MODALS
     modal && h(ResMdl, { modal: modal, onSave: saveRes, onClose: function() { setModal(null); }, rooms: rooms, sources: sources, reservations: reservations }),
     showRooms && h(RoomMgr, { rooms: rooms, reservations: reservations, onSave: saveRooms, onClose: function() { setShowRooms(false); } }),
@@ -572,6 +592,8 @@ function ResDetail(props) {
   var simPhone = ss[0], setSimPhoneLocal = ss[1];
   var es = useState(false);
   var editingSim = es[0], setEditingSim = es[1];
+  var gd = useState(false);
+  var showGuestForm = gd[0], setShowGuestForm = gd[1];
 
   function saveSim(v) { setSimPhone(v); setSimPhoneLocal(v); setEditingSim(false); }
 
@@ -624,6 +646,11 @@ function ResDetail(props) {
           )
         ),
         res.comments && h('div',{className:'dmod-comm'},'\uD83D\uDCAC '+res.comments),
+        // Fisa client button (separat, deasupra actiunilor principale)
+        h('button', {
+          style: { width: '100%', padding: '12px', marginBottom: 12, background: '#f0f4f8', color: '#1e3a5f', border: '1.5px dashed #94a3b8', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 },
+          onClick: function() { setShowGuestForm(true); }
+        }, '\uD83D\uDCCB ', res.guestDetails ? 'Fisa client (completata)' : 'Completeaza fisa client'),
         // Action buttons
         h('div', { className: 'dmod-acts' },
           h('button',{className:'dmod-act-btn',style:{background:'#eff6ff',color:'#2563eb'},onClick:function(){props.onEdit(res);props.onClose();}},h(IEdit),' Editeaza'),
@@ -631,6 +658,178 @@ function ResDetail(props) {
           h('button',{className:'dmod-act-btn',style:{background:'#ecfeff',color:'#0891b2'},onClick:function(){props.onMove(res);props.onClose();}},h(IMove),' Muta'),
           h('button',{className:'dmod-act-btn',style:{background:'#fef2f2',color:'#dc2626'},onClick:function(){props.onDelete(res.id,fullName(res));props.onClose();}},h(ITrash),' Sterge')
         )
+      )
+    ),
+    showGuestForm && h(GuestDetailsForm, {
+      res: res,
+      pensionName: props.pensionName,
+      onSave: props.onSaveGuestDetails,
+      onClose: function() { setShowGuestForm(false); }
+    })
+  );
+}
+
+// ── FISA CLIENT (date suplimentare + fisa de anuntare a sosirii, conform ────
+// HG nr. 237/2001 si Ordinul MAI nr. 400/2004) ──────────────────────────────
+function GuestDetailsForm(props) {
+  var res = props.res;
+  var existing = res.guestDetails || {};
+
+  var fs = useState({
+    fullName: existing.fullName || fullName(res),
+    birthDate: existing.birthDate || '',
+    birthPlace: existing.birthPlace || '',
+    citizenship: existing.citizenship || 'Romana',
+    domicileLocality: existing.domicileLocality || '',
+    domicileStreet: existing.domicileStreet || '',
+    domicileNumber: existing.domicileNumber || '',
+    domicileCountry: existing.domicileCountry || 'Romania',
+    cnp: existing.cnp || '',
+    idType: existing.idType || 'CI',
+    idSeries: existing.idSeries || '',
+    idNumber: existing.idNumber || '',
+    travelPurpose: existing.travelPurpose || 'Turism'
+  });
+  var form = fs[0], setForm = fs[1];
+  var sv = useState(false); var saving = sv[0], setSaving = sv[1];
+  var svd = useState(false); var saved = svd[0], setSaved = svd[1];
+
+  function set(k, v) { setForm(Object.assign({}, form, { [k]: v })); setSaved(false); }
+
+  var isRomanian = form.citizenship.trim().toLowerCase().indexOf('roman') === 0;
+  var cnpValid = !isRomanian || isValidCNP(form.cnp);
+
+  function handleSave() {
+    if (isRomanian && form.cnp && !isValidCNP(form.cnp)) {
+      alert('CNP invalid. Verifica cifrele introduse.');
+      return;
+    }
+    setSaving(true);
+    Promise.resolve(props.onSave(res.id, form)).then(function() {
+      setSaving(false);
+      setSaved(true);
+    }).catch(function(err) {
+      setSaving(false);
+      alert('Eroare la salvare: ' + err.message);
+    });
+  }
+
+  function handlePrint() {
+    var printWin = window.open('', '_blank', 'width=800,height=900');
+    var checkOut = addDays(res.checkIn, res.nights);
+    var now = new Date().toLocaleString('ro-RO');
+    var pension = props.pensionName || 'Pensiunea';
+
+    var html = '<!DOCTYPE html><html lang="ro"><head><meta charset="UTF-8"/>' +
+      '<title>Fisa de anuntare a sosirii si plecarii</title>' +
+      '<style>' +
+        'body{font-family:Arial,sans-serif;font-size:13px;color:#1a202c;margin:24px;}' +
+        'h1{font-size:16px;text-align:center;margin:0 0 2px;}' +
+        'h2{font-size:12px;text-align:center;font-weight:400;color:#64748b;margin:0 0 4px;}' +
+        '.sub{font-size:11px;text-align:center;color:#94a3b8;margin-bottom:18px;}' +
+        '.pension{text-align:center;font-size:13px;font-weight:700;margin-bottom:20px;}' +
+        'table{width:100%;border-collapse:collapse;margin-bottom:14px;}' +
+        'td{border:1px solid #94a3b8;padding:8px 10px;vertical-align:top;}' +
+        '.lbl{font-size:9px;color:#64748b;text-transform:uppercase;display:block;margin-bottom:3px;}' +
+        '.lbl-en{font-size:8px;color:#94a3b8;font-style:italic;display:block;}' +
+        '.val{font-size:13px;font-weight:600;min-height:16px;}' +
+        '.sig{margin-top:40px;display:flex;justify-content:space-between;}' +
+        '.sig div{width:45%;border-top:1px solid #1a202c;padding-top:6px;font-size:11px;text-align:center;color:#64748b;}' +
+        '.foot{margin-top:24px;font-size:9px;color:#94a3b8;text-align:center;}' +
+        '@media print{body{margin:12px;}}' +
+      '</style></head><body>' +
+      '<h1>FISA DE ANUNTARE A SOSIRII SI PLECARII</h1>' +
+      '<h2>REGISTRATION FORM - TO BE COMPLETED ON ARRIVAL</h2>' +
+      '<div class="sub">conform H.G. nr. 237/2001, Ordinul MAI nr. 400/2004</div>' +
+      '<div class="pension">' + pension + '</div>' +
+      '<table><tr><td colspan="2">' +
+        '<span class="lbl">Numele si prenumele</span><span class="lbl-en">Surname and first name</span>' +
+        '<div class="val">' + (form.fullName || '-') + '</div>' +
+      '</td></tr>' +
+      '<tr><td>' +
+        '<span class="lbl">Data nasterii</span><span class="lbl-en">Date of birth</span>' +
+        '<div class="val">' + (form.birthDate || '-') + '</div>' +
+      '</td><td>' +
+        '<span class="lbl">Locul nasterii</span><span class="lbl-en">Place of birth</span>' +
+        '<div class="val">' + (form.birthPlace || '-') + '</div>' +
+      '</td></tr>' +
+      '<tr><td>' +
+        '<span class="lbl">Cetatenia</span><span class="lbl-en">Nationality</span>' +
+        '<div class="val">' + (form.citizenship || '-') + '</div>' +
+      '</td><td>' +
+        '<span class="lbl">CNP (daca e cazul)</span><span class="lbl-en">Personal ID number</span>' +
+        '<div class="val">' + (form.cnp || '-') + '</div>' +
+      '</td></tr>' +
+      '<tr><td colspan="2">' +
+        '<span class="lbl">Domiciliul — Localitatea, strada, nr., tara</span><span class="lbl-en">Residence — City, street, no., country</span>' +
+        '<div class="val">' + [form.domicileLocality, form.domicileStreet, form.domicileNumber, form.domicileCountry].filter(Boolean).join(', ') + '</div>' +
+      '</td></tr>' +
+      '<tr><td>' +
+        '<span class="lbl">Data sosirii</span><span class="lbl-en">Date of arrival</span>' +
+        '<div class="val">' + fmt(res.checkIn) + '</div>' +
+      '</td><td>' +
+        '<span class="lbl">Data plecarii</span><span class="lbl-en">Date of departure</span>' +
+        '<div class="val">' + fmt(checkOut) + '</div>' +
+      '</td></tr>' +
+      '<tr><td colspan="2">' +
+        '<span class="lbl">Scopul calatoriei in Romania</span><span class="lbl-en">Purpose of travelling to Romania</span>' +
+        '<div class="val">' + (form.travelPurpose || '-') + '</div>' +
+      '</td></tr>' +
+      '<tr><td>' +
+        '<span class="lbl">Act de identitate — tip</span><span class="lbl-en">Identity document — type</span>' +
+        '<div class="val">' + (form.idType || '-') + '</div>' +
+      '</td><td>' +
+        '<span class="lbl">Serie si numar</span><span class="lbl-en">Series and number</span>' +
+        '<div class="val">' + (form.idSeries || '-') + ' ' + (form.idNumber || '-') + '</div>' +
+      '</td></tr>' +
+      '</table>' +
+      '<div class="sig"><div>Semnatura turistului<br/>Tourist signature</div><div>Semnatura receptionerului<br/>Receptionist signature</div></div>' +
+      '<div class="foot">Generat automat din Rezervario la ' + now + ' \u2014 pastrare 5 ani conform legii</div>' +
+      '</body></html>';
+
+    printWin.document.write(html);
+    printWin.document.close();
+    setTimeout(function() { printWin.print(); }, 300);
+  }
+
+  return h('div', { className: 'ov', style: { zIndex: 210 }, onClick: props.onClose },
+    h('div', { className: 'mdl', onClick: function(e){e.stopPropagation();} },
+      h('div', { className: 'mhdr' },
+        h('span', { className: 'mtit' }, '\uD83D\uDCCB Fisa client'),
+        h('button', { className: 'mclose', onClick: props.onClose }, '\u2715')
+      ),
+      h('div', { className: 'mbody' },
+        h('div', { style: { fontSize: 12, color: '#64748b', marginBottom: 14, padding: '8px 10px', background: '#eff6ff', borderRadius: 8 } },
+          '\u2139\uFE0F Date suplimentare pentru fisa de anuntare a sosirii, conform legislatiei (H.G. 237/2001). Se pastreaza 5 ani.'
+        ),
+        h('div', { className: 'fgrid' },
+          h(Field, { lbl: 'Nume complet', req: true }, h('input', { className: 'finp', value: form.fullName, onChange: function(e) { set('fullName', e.target.value); } })),
+          h(Field, { lbl: 'Data nasterii' }, h('input', { className: 'finp', type: 'date', value: form.birthDate, onChange: function(e) { set('birthDate', e.target.value); } })),
+          h(Field, { lbl: 'Locul nasterii' }, h('input', { className: 'finp', value: form.birthPlace, onChange: function(e) { set('birthPlace', e.target.value); } })),
+          h(Field, { lbl: 'Cetatenia' }, h('input', { className: 'finp', value: form.citizenship, onChange: function(e) { set('citizenship', e.target.value); } })),
+          h(Field, { lbl: 'CNP' + (isRomanian ? ' (obligatoriu)' : ' (optional)') },
+            h('input', { className: 'finp', value: form.cnp, maxLength: 13, placeholder: isRomanian ? '13 cifre' : 'daca este cazul', onChange: function(e) { set('cnp', e.target.value.replace(/\D/g,'')); } })
+          ),
+          !cnpValid && h('div', { style: { gridColumn: '1/-1', color: '#dc2626', fontSize: 12, fontWeight: 600, marginTop: -8 } }, '\u26A0\uFE0F CNP invalid'),
+          h(Field, { lbl: 'Localitate domiciliu' }, h('input', { className: 'finp', value: form.domicileLocality, onChange: function(e) { set('domicileLocality', e.target.value); } })),
+          h(Field, { lbl: 'Strada, nr.' }, h('input', { className: 'finp', value: form.domicileStreet, onChange: function(e) { set('domicileStreet', e.target.value); } })),
+          h(Field, { lbl: 'Numar' }, h('input', { className: 'finp', value: form.domicileNumber, onChange: function(e) { set('domicileNumber', e.target.value); } })),
+          h(Field, { lbl: 'Tara domiciliu' }, h('input', { className: 'finp', value: form.domicileCountry, onChange: function(e) { set('domicileCountry', e.target.value); } })),
+          h(Field, { lbl: 'Tip act identitate' },
+            h('select', { className: 'finp', value: form.idType, onChange: function(e) { set('idType', e.target.value); } },
+              h('option', { value: 'CI' }, 'Carte de identitate'),
+              h('option', { value: 'Pasaport' }, 'Pasaport')
+            )
+          ),
+          h(Field, { lbl: 'Serie act' }, h('input', { className: 'finp', value: form.idSeries, onChange: function(e) { set('idSeries', e.target.value.toUpperCase()); } })),
+          h(Field, { lbl: 'Numar act' }, h('input', { className: 'finp', value: form.idNumber, onChange: function(e) { set('idNumber', e.target.value); } })),
+          h(Field, { lbl: 'Scopul calatoriei' }, h('input', { className: 'finp', value: form.travelPurpose, onChange: function(e) { set('travelPurpose', e.target.value); } }))
+        )
+      ),
+      h('div', { className: 'mfoot', style: { flexWrap: 'wrap', gap: 8 } },
+        h('button', { className: 'mcanc', onClick: props.onClose }, 'Inchide'),
+        h('button', { className: 'msave', style: { background: '#7c3aed' }, onClick: handlePrint }, '\uD83D\uDDA8\uFE0F Genereaza PDF'),
+        h('button', { className: 'msave', disabled: saving, onClick: handleSave }, saving ? 'Se salveaza...' : (saved ? '\u2713 Salvat' : 'Salveaza'))
       )
     )
   );
@@ -724,6 +923,22 @@ function ResRow(props) {
       isToday && h('span', { className: 'cl3-badge cl3-today' }, 'AZI'),
       isTomorrow && h('span', { className: 'cl3-badge cl3-tom' }, 'M\u00C2INE'),
       h('span', { className: 'cl3-hint' }, '\u2139 detalii')
+    ),
+
+    // ── Linia 4: Bifa check-in / check-out (doar in sectiunile relevante) ────
+    props.checkType === 'checkin' && h('div', {
+      className: 'cl4-check' + (res.checkedIn ? ' done' : ''),
+      onClick: function(e) { e.stopPropagation(); if (props.onToggleCheckedIn) props.onToggleCheckedIn(res); }
+    },
+      h('span', { className: 'cl4-box' }, res.checkedIn ? '\u2611' : '\u2610'),
+      h('span', null, res.checkedIn ? 'Turist sosit \u2014 apasa pentru a anula' : 'Marcheaza turist sosit')
+    ),
+    props.checkType === 'checkout' && h('div', {
+      className: 'cl4-check' + (res.roomCleaned ? ' done' : ''),
+      onClick: function(e) { e.stopPropagation(); if (props.onToggleRoomCleaned) props.onToggleRoomCleaned(res); }
+    },
+      h('span', { className: 'cl4-box' }, res.roomCleaned ? '\u2611' : '\u2610'),
+      h('span', null, res.roomCleaned ? 'Camera curatata \u2014 apasa pentru a anula' : 'Marcheaza camera curatata')
     )
   );
 }
@@ -757,7 +972,7 @@ function ResTab(props) {
       if (checkOut < today) return; // sejur incheiat — nu se mai arata in lista activa
 
       if (r.checkIn === today) {
-        checkinToday.push(r);
+        if (r.checkedIn) { staying.push(r); } else { checkinToday.push(r); }
       } else if (checkOut === today) {
         checkoutToday.push(r);
       } else if (r.checkIn < today && checkOut > today) {
@@ -776,7 +991,7 @@ function ResTab(props) {
 
   var totalActive = categorized.checkinToday.length + categorized.checkoutToday.length + categorized.staying.length + categorized.future.length;
 
-  function rowProps(res) {
+  function rowProps(res, checkType) {
     return {
       key: res.id, res: res, sources: sources,
       onDetail: function() { setDetailRes(res); },
@@ -784,13 +999,17 @@ function ResTab(props) {
       onCopy: props.onCopy,
       onMove: props.onMove,
       onDelete: props.onDelete,
-      onSendMsg: props.onSendMsg
+      onSendMsg: props.onSendMsg,
+      checkType: checkType,
+      onToggleCheckedIn: props.onToggleCheckedIn,
+      onToggleRoomCleaned: props.onToggleRoomCleaned
     };
   }
 
   // Randeaza o sectiune (Intrari azi / Iesiri azi / etc), optional impartita pe camere
-  // daca viewMode === 'room'.
-  function renderSection(title, icon, list, bgColor) {
+  // daca viewMode === 'room'. checkType: 'checkin' | 'checkout' | null — determina ce bifa
+  // se afiseaza pe cardurile din aceasta sectiune.
+  function renderSection(title, icon, list, bgColor, checkType) {
     if (list.length === 0) return null;
     var body;
     if (viewMode === 'room') {
@@ -807,11 +1026,11 @@ function ResTab(props) {
           h('div', { style: { fontSize: 12.5, fontWeight: 700, color: '#64748b', padding: '4px 4px', display: 'flex', alignItems: 'center', gap: 6 } },
             '\uD83D\uDEAA ' + rm, h('span', { style: { opacity: .6, fontWeight: 600 } }, '(' + byRoom[rm].length + ')')
           ),
-          byRoom[rm].map(function(res) { return h(ResRow, rowProps(res)); })
+          byRoom[rm].map(function(res) { return h(ResRow, rowProps(res, checkType)); })
         );
       });
     } else {
-      body = list.map(function(res) { return h(ResRow, rowProps(res)); });
+      body = list.map(function(res) { return h(ResRow, rowProps(res, checkType)); });
     }
     return h('div', { style: { marginBottom: 20 } },
       h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: bgColor || '#1e3a5f', borderRadius: 10, color: '#fff', marginBottom: 8 } },
@@ -855,8 +1074,8 @@ function ResTab(props) {
           h('div', { style: { fontSize: 13, marginTop: 6 } }, 'Apasa "+ Rezervare noua" pentru a adauga')
         )
       : h('div', null,
-          renderSection('Intrari azi', '\uD83D\uDFE2', categorized.checkinToday, '#16a34a'),
-          renderSection('Iesiri azi', '\uD83D\uDD34', categorized.checkoutToday, '#dc2626'),
+          renderSection('Intrari azi', '\uD83D\uDFE2', categorized.checkinToday, '#16a34a', 'checkin'),
+          renderSection('Iesiri azi', '\uD83D\uDD34', categorized.checkoutToday, '#dc2626', 'checkout'),
           renderSection('Cazati in curs', '\uD83C\uDFE8', categorized.staying, '#2563eb'),
           renderSection('Intrari viitoare', '\uD83D\uDCC5', categorized.future, '#1e3a5f')
         ),
@@ -878,7 +1097,9 @@ function ResTab(props) {
       onEdit: props.onEdit,
       onCopy: props.onCopy,
       onMove: props.onMove,
-      onDelete: function(id, name) { props.onDelete(id, name); setDetailRes(null); }
+      onDelete: function(id, name) { props.onDelete(id, name); setDetailRes(null); },
+      onSaveGuestDetails: props.onSaveGuestDetails,
+      pensionName: props.pensionName
     })
   );
 }
@@ -2870,7 +3091,9 @@ function ArchiveTab(props) {
       onCopy: props.onCopy,
       onMove: props.onMove,
       onSendMsg: function(r) { props.onSendMsg(r); },
-      onDelete: function(id, name) { props.onDelete(id, name); setDetailRes(null); }
+      onDelete: function(id, name) { props.onDelete(id, name); setDetailRes(null); },
+      onSaveGuestDetails: props.onSaveGuestDetails,
+      pensionName: props.pensionName
     })
   );
 }

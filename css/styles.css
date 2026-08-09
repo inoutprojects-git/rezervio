@@ -271,3 +271,9 @@ a{color:#2563eb;text-decoration:none;}
 .row-act-btn.copy{background:#f5f3ff;color:#7c3aed;}
 .row-act-btn.move{background:#ecfeff;color:#0891b2;}
 .row-act-btn.del{background:#fef2f2;color:#dc2626;}
+
+/* ── CHECK-IN / CHECK-OUT TOGGLE BAR (ResRow linia 4) ─────────────────────── */
+.cl4-check{display:flex;align-items:center;gap:8px;padding:10px 13px;border-top:1px solid #f1f5f9;cursor:pointer;font-size:13.5px;font-weight:700;color:#64748b;background:#fafbfc;transition:background .15s;}
+.cl4-check:active{background:#f1f5f9;}
+.cl4-check.done{color:#16a34a;background:#f0fdf4;}
+.cl4-box{font-size:18px;line-height:1;flex-shrink:0;}
