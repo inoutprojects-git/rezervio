@@ -104,6 +104,9 @@
                 var data = snap.val();
                 if (!data) {
                   // Utilizator nou — devine automat Owner al unei pensiuni noi, plan Basic.
+                  // IMPORTANT: scrierile trebuie facute SECVENTIAL (users/ intai, apoi pensions/),
+                  // nu in paralel — regulile Firebase verifica users/{uid}/pensionId pentru a
+                  // permite crearea pensiunii, deci acel camp trebuie sa existe deja scris.
                   var newPensionId = 'p_' + user.uid.slice(0, 8);
                   PENSION_ID = newPensionId;
                   USER_ROLE = 'owner';
@@ -113,20 +116,25 @@
                     role: 'owner',
                     pensionId: newPensionId,
                     createdAt: Date.now()
-                  }).catch(function(){});
-                  firebaseDB.ref('pensions/' + newPensionId).set({
-                    ownerUid: user.uid,
-                    ownerEmail: user.email,
-                    pensionName: 'Pensiunea Mea',
-                    plan: 'basic',
-                    status: 'active',
-                    accountCount: 1,
-                    trialEndsAt: trialEnds,
-                    createdAt: Date.now()
-                  }).catch(function(){});
-                  firebaseDB.ref('pensions/' + newPensionId + '/members/' + user.uid).set({
-                    email: user.email, role: 'owner', addedAt: Date.now()
-                  }).catch(function(){});
+                  }).then(function() {
+                    return firebaseDB.ref('pensions/' + newPensionId).set({
+                      ownerUid: user.uid,
+                      ownerEmail: user.email,
+                      pensionName: 'Pensiunea Mea',
+                      plan: 'basic',
+                      status: 'active',
+                      accountCount: 1,
+                      trialEndsAt: trialEnds,
+                      createdAt: Date.now()
+                    });
+                  }).then(function() {
+                    return firebaseDB.ref('pensions/' + newPensionId + '/members/' + user.uid).set({
+                      email: user.email, role: 'owner', addedAt: Date.now()
+                    });
+                  }).catch(function(err) {
+                    console.error('Eroare la initializarea contului nou:', err);
+                    alert('A aparut o eroare la crearea contului. Reincarca pagina si incearca din nou. Detalii: ' + err.message);
+                  });
                 } else {
                   USER_ROLE = data.role || 'owner';
                   PENSION_ID = data.pensionId || null;

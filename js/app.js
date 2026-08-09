@@ -338,7 +338,7 @@ function App() {
           h('span', { style: { width: 8, height: 8, borderRadius: '50%', background: syncColor, display: 'inline-block', transition: 'background .3s', animation: sync === 'syncing' ? 'pulse .8s infinite' : 'none' } }),
           h('span', { style: { fontSize: 11, fontWeight: 600 } }, sync === 'online' ? 'OK' : sync === 'syncing' ? '...' : 'Off')
         ),
-        h('button', { title: 'Logout', style: { width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,.15)', border: '1.5px solid rgba(255,255,255,.25)', color: '#fff', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }, onClick: function() { if (confirm('Iesi din cont?')) firebase.auth().signOut(); } }, '🚪')
+        h('button', { title: 'Logout', style: { width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,.15)', border: '1.5px solid rgba(255,255,255,.25)', color: '#fff', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }, onClick: function() { setConfirm({ msg: 'Iesi din cont?', okLbl: 'Iesi', ok: function() { setConfirm(null); firebase.auth().signOut(); } }); } }, '🚪')
       ),
     ),
     // DRAWER
@@ -4073,11 +4073,11 @@ function TodayBar(props) {
   }, [rooms, reservations, tod]);
 
   var cells = [
+    { num: categorized.future.length, lbl: 'Rezervari', color: categorized.future.length > 0 ? 'blue' : '', type: 'future' },
     { num: categorized.staying.length, lbl: 'Ocupate', color: categorized.staying.length > 0 ? 'amber' : '', type: 'staying' },
     { num: libere.length, lbl: 'Libere', color: libere.length > 0 ? 'green' : '', type: 'free' },
     { num: categorized.checkoutToday.length, lbl: 'Plecari azi', color: categorized.checkoutToday.length > 0 ? 'amber' : '', type: 'checkout' },
-    { num: categorized.checkinToday.length, lbl: 'Sosiri azi', color: categorized.checkinToday.length > 0 ? 'blue' : '', type: 'checkin' },
-    { num: categorized.future.length, lbl: 'Rezervari', color: categorized.future.length > 0 ? 'blue' : '', type: 'future' }
+    { num: categorized.checkinToday.length, lbl: 'Sosiri azi', color: categorized.checkinToday.length > 0 ? 'blue' : '', type: 'checkin' }
   ];
 
   return h('div', { className: 'tod-bar' },

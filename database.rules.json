@@ -15,25 +15,28 @@
         ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || root.child('users').child(auth.uid).child('pensionId').val() === $pensionId)",
 
         "plan": {
-          ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'network_admin'"
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (!data.exists() && root.child('users').child(auth.uid).child('pensionId').val() === $pensionId))"
         },
         "status": {
-          ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'network_admin'"
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (!data.exists() && root.child('users').child(auth.uid).child('pensionId').val() === $pensionId))"
         },
         "accountCount": {
           ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (root.child('users').child(auth.uid).child('role').val() === 'owner' && root.child('users').child(auth.uid).child('pensionId').val() === $pensionId))"
         },
         "trialEndsAt": {
-          ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'network_admin'"
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (!data.exists() && root.child('users').child(auth.uid).child('pensionId').val() === $pensionId))"
         },
         "ownerUid": {
-          ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'network_admin'"
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (!data.exists() && auth.uid === newData.val()))"
         },
         "ownerEmail": {
-          ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'network_admin'"
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (!data.exists() && root.child('users').child(auth.uid).child('pensionId').val() === $pensionId))"
+        },
+        "pensionName": {
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (root.child('users').child(auth.uid).child('pensionId').val() === $pensionId && root.child('users').child(auth.uid).child('role').val() === 'owner'))"
         },
         "createdAt": {
-          ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'network_admin'"
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (!data.exists() && root.child('users').child(auth.uid).child('pensionId').val() === $pensionId))"
         },
 
         "members": {
