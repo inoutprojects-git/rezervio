@@ -11,6 +11,8 @@
     },
 
     "pensions": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'network_admin'",
+
       "$pensionId": {
         ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || root.child('users').child(auth.uid).child('pensionId').val() === $pensionId)",
 
