@@ -13,6 +13,14 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1a202c; background: #f0f4f8; }
     html { scroll-behavior: smooth; }
+    .auth-tab { flex: 1; padding: 12px; border: none; background: #f1f5f9; color: #64748b; font-weight: 700; font-size: 15px; cursor: pointer; border-radius: 10px; transition: all .15s; }
+    .auth-tab.active { background: #2563eb; color: #fff; }
+    .auth-input { width: 100%; padding: 13px 14px; border: 2px solid #d1d9e0; border-radius: 10px; font-size: 15px; margin-bottom: 12px; outline: none; }
+    .auth-input:focus { border-color: #2563eb; }
+    .auth-submit { width: 100%; padding: 14px; background: #2563eb; color: #fff; border: none; border-radius: 10px; font-weight: 700; font-size: 15px; cursor: pointer; margin-top: 4px; }
+    .auth-submit:disabled { opacity: .6; cursor: default; }
+    .auth-error { color: #dc2626; font-size: 13px; font-weight: 600; margin-bottom: 12px; display: none; }
+    .auth-link { display: block; text-align: center; margin-top: 14px; color: #2563eb; font-size: 13.5px; font-weight: 600; text-decoration: none; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -21,9 +29,30 @@
     <div style="font-size:60px;margin-bottom:20px;">🏠</div>
     <h1 style="color:#fff;font-size:28px;font-weight:800;text-align:center;">Rezervio</h1>
     <p style="color:rgba(255,255,255,.75);font-size:15px;text-align:center;max-width:300px;">Gestione rezervări pensiune — PWA cu Firebase</p>
-    
-    <!-- Firebase Auth UI injectat aici -->
-    <div id="firebaseui-auth-container" style="width:100%;max-width:400px;"></div>
+
+    <div style="background:#fff;border-radius:16px;padding:24px;width:100%;max-width:380px;box-shadow:0 10px 40px rgba(0,0,0,.25);">
+      <div style="display:flex;gap:8px;margin-bottom:22px;">
+        <button id="tab-login" class="auth-tab active" type="button">Logheaza-te</button>
+        <button id="tab-signup" class="auth-tab" type="button">Inscrie-te</button>
+      </div>
+
+      <!-- FORMULAR LOGIN -->
+      <form id="login-form" style="display:block;">
+        <input type="email" id="login-email" class="auth-input" placeholder="Email" required autocomplete="email">
+        <input type="password" id="login-password" class="auth-input" placeholder="Parola" required autocomplete="current-password">
+        <div id="login-error" class="auth-error"></div>
+        <button type="submit" id="login-submit" class="auth-submit">Intra in cont</button>
+        <a href="#" id="forgot-password" class="auth-link">Am uitat parola</a>
+      </form>
+
+      <!-- FORMULAR INSCRIERE -->
+      <form id="signup-form" style="display:none;">
+        <input type="email" id="signup-email" class="auth-input" placeholder="Email" required autocomplete="email">
+        <input type="password" id="signup-password" class="auth-input" placeholder="Parola (minim 6 caractere)" required autocomplete="new-password" minlength="6">
+        <div id="signup-error" class="auth-error"></div>
+        <button type="submit" id="signup-submit" class="auth-submit">Creeaza cont</button>
+      </form>
+    </div>
   </div>
 
   <!-- APP (afisat dupa login) -->
@@ -37,8 +66,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/ui/6.0.1/firebase-ui-auth.js"></script>
-  <link type="text/css" rel="stylesheet" href="https://www.gstatic.com/firebasejs/ui/6.0.1/firebase-ui-auth.css">
 
   <!-- APP SCRIPTS (in order) -->
   <script src="js/config.js"></script>
@@ -68,32 +95,90 @@
       firebaseAuth = fbAuth;
       firebaseDB = firebase.database();
 
-      // Setup FirebaseUI
-      var uiConfig = {
-        callbacks: {
-          uiShown: function() { ls.style.display = 'flex'; },
-          signInSuccessWithAuthResult: function(authResult, redirectUrl) {
-            ls.style.display = 'none';
-            root.style.display = 'block';
-            return false;
-          },
-          signInFailure: function(error) {
-            console.error('Sign-in failed:', error);
-            return Promise.resolve();
-          }
-        },
-        signInFlow: 'popup',
-        signInOptions: [
-          firebase.auth.EmailAuthProvider.PROVIDER_ID
-        ],
-        tosUrl: '#',
-        privacyPolicyUrl: '#'
-      };
+      // ── FORMULAR LOGIN / INSCRIERE PROPRIU (fara FirebaseUI) ──────────────────
+      var tabLogin = document.getElementById('tab-login');
+      var tabSignup = document.getElementById('tab-signup');
+      var loginForm = document.getElementById('login-form');
+      var signupForm = document.getElementById('signup-form');
+      var loginError = document.getElementById('login-error');
+      var signupError = document.getElementById('signup-error');
+      var loginSubmit = document.getElementById('login-submit');
+      var signupSubmit = document.getElementById('signup-submit');
+      var forgotPasswordLink = document.getElementById('forgot-password');
 
-      var ui = new firebaseui.auth.AuthUI(fbAuth);
-      if (!firebase.auth().currentUser) {
-        ui.start('#firebaseui-auth-container', uiConfig);
+      tabLogin.addEventListener('click', function() {
+        tabLogin.className = 'auth-tab active';
+        tabSignup.className = 'auth-tab';
+        loginForm.style.display = 'block';
+        signupForm.style.display = 'none';
+        loginError.style.display = 'none';
+      });
+      tabSignup.addEventListener('click', function() {
+        tabSignup.className = 'auth-tab active';
+        tabLogin.className = 'auth-tab';
+        signupForm.style.display = 'block';
+        loginForm.style.display = 'none';
+        signupError.style.display = 'none';
+      });
+
+      // Traduce codurile de eroare Firebase in mesaje intelegibile in romana
+      function authErrMsg(code) {
+        var msgs = {
+          'auth/invalid-email': 'Adresa de email nu este valida.',
+          'auth/user-disabled': 'Acest cont a fost dezactivat.',
+          'auth/user-not-found': 'Nu exista niciun cont cu acest email. Incearca "Inscrie-te".',
+          'auth/wrong-password': 'Parola este gresita.',
+          'auth/invalid-credential': 'Email sau parola incorecte.',
+          'auth/email-already-in-use': 'Exista deja un cont cu acest email. Incearca "Logheaza-te".',
+          'auth/weak-password': 'Parola trebuie sa aiba minim 6 caractere.',
+          'auth/too-many-requests': 'Prea multe incercari. Asteapta cateva minute si incearca din nou.',
+          'auth/network-request-failed': 'Eroare de conexiune. Verifica internetul si incearca din nou.'
+        };
+        return msgs[code] || 'A aparut o eroare. Incearca din nou.';
       }
+
+      function showError(el, msg) { el.textContent = msg; el.style.display = 'block'; }
+      function hideError(el) { el.style.display = 'none'; }
+
+      loginForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        hideError(loginError);
+        var email = document.getElementById('login-email').value.trim();
+        var pass = document.getElementById('login-password').value;
+        loginSubmit.disabled = true;
+        loginSubmit.textContent = 'Se conecteaza...';
+        fbAuth.signInWithEmailAndPassword(email, pass)
+          .catch(function(err) { showError(loginError, authErrMsg(err.code)); })
+          .then(function() {
+            loginSubmit.disabled = false;
+            loginSubmit.textContent = 'Intra in cont';
+          });
+      });
+
+      signupForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        hideError(signupError);
+        var email = document.getElementById('signup-email').value.trim();
+        var pass = document.getElementById('signup-password').value;
+        if (pass.length < 6) { showError(signupError, 'Parola trebuie sa aiba minim 6 caractere.'); return; }
+        signupSubmit.disabled = true;
+        signupSubmit.textContent = 'Se creeaza contul...';
+        fbAuth.createUserWithEmailAndPassword(email, pass)
+          .catch(function(err) { showError(signupError, authErrMsg(err.code)); })
+          .then(function() {
+            signupSubmit.disabled = false;
+            signupSubmit.textContent = 'Creeaza cont';
+          });
+      });
+
+      forgotPasswordLink.addEventListener('click', function(e) {
+        e.preventDefault();
+        var email = document.getElementById('login-email').value.trim();
+        if (!email) { showError(loginError, 'Introdu email-ul mai sus, apoi apasa din nou "Am uitat parola".'); return; }
+        fbAuth.sendPasswordResetEmail(email)
+          .then(function() { showError(loginError, 'Ti-am trimis un email cu instructiuni de resetare a parolei.'); loginError.style.color = '#16a34a'; })
+          .catch(function(err) { loginError.style.color = '#dc2626'; showError(loginError, authErrMsg(err.code)); });
+      });
 
       // Auth state listener
       function initFirebaseAndAuthUI() {
@@ -107,9 +192,11 @@
                   // IMPORTANT: scrierile trebuie facute SECVENTIAL (users/ intai, apoi pensions/),
                   // nu in paralel — regulile Firebase verifica users/{uid}/pensionId pentru a
                   // permite crearea pensiunii, deci acel camp trebuie sa existe deja scris.
+                  // La fel de important: startApp() NU porneste decat DUPA ce tot lantul de
+                  // scrieri s-a confirmat — altfel App incepe sa citeasca pensions/{id} inainte
+                  // ca users/{uid}/pensionId sa fie efectiv confirmat in Firebase, iar regula
+                  // de citire il respinge cu PERMISSION_DENIED (conditie de cursa reala).
                   var newPensionId = 'p_' + user.uid.slice(0, 8);
-                  PENSION_ID = newPensionId;
-                  USER_ROLE = 'owner';
                   var trialEnds = Date.now() + 30 * 24 * 60 * 60 * 1000;
                   firebaseDB.ref('users/' + user.uid).set({
                     email: user.email,
@@ -131,6 +218,12 @@
                     return firebaseDB.ref('pensions/' + newPensionId + '/members/' + user.uid).set({
                       email: user.email, role: 'owner', addedAt: Date.now()
                     });
+                  }).then(function() {
+                    PENSION_ID = newPensionId;
+                    USER_ROLE = 'owner';
+                    ls.style.display = 'none';
+                    root.style.display = 'block';
+                    tryStartApp();
                   }).catch(function(err) {
                     console.error('Eroare la initializarea contului nou:', err);
                     alert('A aparut o eroare la crearea contului. Reincarca pagina si incearca din nou. Detalii: ' + err.message);
@@ -138,10 +231,10 @@
                 } else {
                   USER_ROLE = data.role || 'owner';
                   PENSION_ID = data.pensionId || null;
+                  ls.style.display = 'none';
+                  root.style.display = 'block';
+                  tryStartApp();
                 }
-                ls.style.display = 'none';
-                root.style.display = 'block';
-                tryStartApp();
               })
               .catch(function() {
                 PENSION_ID = 'p_' + user.uid.slice(0, 8);
