@@ -25,8 +25,8 @@ var WHOLE = '__ALL__'; // rezervare toata locatia
 var SIM_KEY = 'my_sim_phone';
 var CACHE_NAME = 'rzv6';
 
-var DEF_SRC = ['Ionut', 'Adi', 'Booking'];
-var DEF_ROOMS = ['Camera 1', 'Camera 2', 'Camera 3', 'Camera 4'];
+var DEF_SRC = [];
+var DEF_ROOMS = [];
 
 var EMPTY_RES = {
   id: null, room: '', firstName: '', lastName: '', phone: '',

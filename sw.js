@@ -1,4 +1,4 @@
-// Rezervario Service Worker — versiune minimă pentru instalare PWA
+// Rezervio Service Worker — versiune minimă pentru instalare PWA
 // (fără cache agresiv, ca să nu servească date vechi de rezervări)
 
 var CACHE_NAME = 'rezervario-v1';

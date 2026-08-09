@@ -45,9 +45,9 @@ function App() {
   // Titlul paginii reflecta numele pensiunii (setat din Firebase)
   useEffect(function() {
     if (pensionName) {
-      document.title = pensionName + ' — Rezervario';
+      document.title = pensionName + ' — Rezervio';
       var titleEl = document.getElementById('page-title');
-      if (titleEl) titleEl.textContent = pensionName + ' — Rezervario';
+      if (titleEl) titleEl.textContent = pensionName + ' — Rezervio';
     }
   }, [pensionName]);
 
@@ -1318,7 +1318,7 @@ function GuestDetailsForm(props) {
       '</td></tr>' +
       '</table>' +
       '<div class="sig"><div>Semnatura turistului<br/>Tourist signature</div><div>Semnatura receptionerului<br/>Receptionist signature</div></div>' +
-      '<div class="foot">Generat automat din Rezervario la ' + now + ' \u2014 pastrare 5 ani conform legii</div>' +
+      '<div class="foot">Generat automat din Rezervio la ' + now + ' \u2014 pastrare 5 ani conform legii</div>' +
       '</body></html>';
 
     printWin.document.write(html);
@@ -2348,7 +2348,7 @@ function Drawer(props) {
     h('div', { className: 'drw' },
       h('div', { className: 'drw-hdr' },
         h('div', { className: 'drw-logo' }, '\uD83C\uDFE1'),
-        h('div', { className: 'drw-tit' }, 'Rezervario'),
+        h('div', { className: 'drw-tit' }, 'Rezervio'),
         h('div', { className: 'drw-syn' },
           h('span', { style: { width: 7, height: 7, borderRadius: '50%', background: syncColor, display: 'inline-block' } }),
           syncLabel

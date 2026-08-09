@@ -1,6 +1,6 @@
 {
-  "name": "Rezervario — Gestiune Rezervări Pensiune",
-  "short_name": "Rezervario",
+  "name": "Rezervio — Gestiune Rezervări Pensiune",
+  "short_name": "Rezervio",
   "description": "PWA pentru gestiunea rezervărilor pensiuni mici. Firebase + React.",
   "start_url": "/",
   "display": "standalone",
