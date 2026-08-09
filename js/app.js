@@ -34,9 +34,11 @@ function App() {
   var wes = useState(function() { return lc.get('p_whole_enabled', true); }); var wholeEnabled = wes[0], setWholeEnabled = wes[1];
   var pls = useState('basic'); var plan = pls[0], setPlan = pls[1];
   var pst = useState('active'); var pensionStatus = pst[0], setPensionStatus = pst[1];
+  var tea = useState(null); var trialEndsAt = tea[0], setTrialEndsAt = tea[1];
   var pac = useState(1); var accountCount = pac[0], setAccountCount = pac[1];
   var pmb = useState({}); var members = pmb[0], setMembers = pmb[1];
   var stm = useState(false); var showTeam = stm[0], setShowTeam = stm[1];
+  var sgd = useState(false); var showGuide = sgd[0], setShowGuide = sgd[1];
   var afs = useState('future'); var activeFilter = afs[0], setActiveFilter = afs[1];
   var brs = useState(function() { return lc.get('p_bookrules', { minGapDays: 0, minNights: 0, minAdvanceDays: 0 }); }); var bookingRules = brs[0], setBookingRules = brs[1];
   var sbr = useState(false); var showBookingRules = sbr[0], setShowBookingRules = sbr[1];
@@ -73,11 +75,12 @@ function App() {
     var u4 = fb.on('status', function(v) { if (v) setPensionStatus(v); });
     var u5 = fb.on('accountCount', function(v) { if (v) setAccountCount(v); });
     var u6 = fb.on('members', function(v) { setMembers(v || {}); });
+    var u7 = fb.on('trialEndsAt', function(v) { setTrialEndsAt(v || null); });
     firebaseDB.ref('.info/connected').on('value', function(snap) {
       if (snap.val() === false) { setSync('offline'); setRes(lc.get('p_res', [])); setLoading(false); }
       else setSync('online');
     });
-    return function() { u1(); u2(); u3(); u4(); u5(); u6(); };
+    return function() { u1(); u2(); u3(); u4(); u5(); u6(); u7(); };
   }, []);
 
   // Date de facturare: legate de USER (cont), nu de pensiune — separat de fb.on() de mai sus,
@@ -316,6 +319,19 @@ function App() {
     );
   }
 
+  // Perioada gratuita (30 zile) a expirat si Network Admin nu a confirmat inca plata
+  // (trialEndsAt nu a fost extins). Blocheaza accesul, dar cu mesaj diferit de suspendare —
+  // aici nu e o penalizare, doar un memento ca abonamentul trebuie activat.
+  if (trialEndsAt && trialEndsAt < Date.now()) {
+    return h('div', { className: 'ldg' },
+      h('div', { style: { fontSize: 48 } }, '\u23F3'),
+      h('div', { style: { fontSize: 18, fontWeight: 800, color: '#1a202c' } }, 'Perioada gratuita a expirat'),
+      h('div', { style: { fontSize: 14, color: '#64748b', textAlign: 'center', maxWidth: 320 } }, 'Cele 30 de zile de proba s-au incheiat. Contacteaza-ne pentru a activa abonamentul si a continua sa folosesti Rezervio.'),
+      h('a', { href: waUrl(SUPPORT_PHONE), target: '_blank', rel: 'noopener', style: { marginTop: 4, padding: '12px 22px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8 } }, '\uD83D\uDCAC Contacteaza suport'),
+      h('button', { style: { marginTop: 4, padding: '10px 20px', background: '#f1f5f9', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer' }, onClick: function() { firebase.auth().signOut(); } }, 'Deconectare')
+    );
+  }
+
   return h('div', { className: 'app' },
     // HEADER
     h('header', { style: { background: 'linear-gradient(135deg,#1e3a5f,#1d4ed8)', color: '#fff', padding: '13px 16px', paddingTop: 'max(13px,env(safe-area-inset-top))', position: 'sticky', top: 0, zIndex: 60, boxShadow: '0 2px 16px rgba(0,0,0,.22)' } },
@@ -364,6 +380,7 @@ function App() {
       onToggleWholeEnabled: toggleWholeEnabled,
       userRole: USER_ROLE, plan: plan, accountCount: accountCount,
       onOpenTeam: function() { setShowTeam(true); },
+      onOpenGuide: function() { setShowGuide(true); },
       onClose: function() { setDrawerOpen(false); }
     }),
     // PENDING BANNER
@@ -454,6 +471,10 @@ function App() {
       onInvite: inviteStaff, onRemove: removeStaff,
       onClose: function() { setShowTeam(false); }
     }),
+    showGuide && h(OnboardingGuide, {
+      pensionName: pensionName, rooms: rooms, sources: sources, reservations: reservations, billingInfo: billingInfo,
+      onClose: function() { setShowGuide(false); }
+    }),
     confirm && h(Confirm, { msg: confirm.msg, okLbl: confirm.okLbl, ok: confirm.ok, onCancel: function() { setConfirm(null); } })
   );
 }
@@ -504,6 +525,18 @@ function NetworkAdminDashboard() {
     var next = base + 7 * 24 * 60 * 60 * 1000;
     setBusyFor(id, true);
     firebaseDB.ref('pensions/' + id + '/trialEndsAt').set(next)
+      .catch(function(err) { alert('Eroare: ' + err.message); })
+      .then(function() { setBusyFor(id, false); });
+  }
+
+  // Confirmare plata manuala (Faza 1 din roadmap — transfer bancar) — extinde accesul
+  // cu 30 de zile de la ACUM (nu de la vechiul trialEndsAt) si reactiveaza contul daca
+  // fusese blocat de expirarea perioadei gratuite.
+  function confirmPayment(id) {
+    setBusyFor(id, true);
+    var next = Date.now() + 30 * 24 * 60 * 60 * 1000;
+    firebaseDB.ref('pensions/' + id + '/trialEndsAt').set(next)
+      .then(function() { return firebaseDB.ref('pensions/' + id + '/status').set('active'); })
       .catch(function(err) { alert('Eroare: ' + err.message); })
       .then(function() { setBusyFor(id, false); });
   }
@@ -578,7 +611,11 @@ function NetworkAdminDashboard() {
                 h('button', {
                   style: { padding: '8px 14px', background: '#f1f5f9', color: '#374151', border: '1.5px solid #d1d9e0', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' },
                   disabled: isBusy, onClick: function() { extendTrial(p.id, p.trialEndsAt); }
-                }, '+7 zile trial')
+                }, '+7 zile trial'),
+                h('button', {
+                  style: { padding: '8px 14px', background: '#dcfce7', color: '#15803d', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' },
+                  disabled: isBusy, onClick: function() { confirmPayment(p.id); }
+                }, '\u2713 Confirma plata (+30 zile)')
               )
             );
           })
@@ -965,6 +1002,44 @@ function TeamMgr(props) {
       ok: function() { handleRemove(toDelete); },
       onCancel: function() { setToDelete(null); }
     })
+  );
+}
+
+// ── GHID DE PORNIRE (checklist operationalizare initiala) ───────────────────
+function OnboardingGuide(props) {
+  var steps = [
+    { done: !!props.pensionName && props.pensionName !== 'Pensiunea Mea', title: 'Numeste-ti pensiunea', desc: 'Din meniu → Cont si facturare → seteaza numele real si o poza (optional).' },
+    { done: (props.rooms || []).length > 0, title: 'Adauga camerele', desc: 'Din meniu → Configurare pensiune → Camere → adauga toate camerele disponibile.' },
+    { done: (props.sources || []).length > 0, title: 'Adauga sursele de rezervare', desc: 'Din meniu → Configurare pensiune → Surse → adauga Booking, Airbnb, telefon direct etc.' },
+    { done: (props.reservations || []).length > 0, title: 'Fa prima rezervare', desc: 'Din pagina principala → "+ Rezervare noua" → completeaza datele oaspetelui.' },
+    { done: !!(props.billingInfo && (props.billingInfo.fullName || props.billingInfo.companyName)), title: 'Completeaza datele de facturare', desc: 'Din meniu → Cont si facturare → Date facturare (necesar pentru abonament dupa perioada gratuita).' }
+  ];
+  var doneCount = steps.filter(function(s) { return s.done; }).length;
+
+  return h('div', { className: 'ov', onClick: props.onClose },
+    h('div', { className: 'mdl', onClick: function(e) { e.stopPropagation(); } },
+      h('div', { className: 'mhdr' },
+        h('span', { className: 'mtit' }, '\uD83D\uDCD6 Ghid de pornire'),
+        h('button', { className: 'mclose', onClick: props.onClose }, '\u2715')
+      ),
+      h('div', { className: 'mbody' },
+        h('div', { style: { fontSize: 13, fontWeight: 700, color: '#1e3a5f', marginBottom: 16, padding: '10px 12px', background: '#eff6ff', borderRadius: 9, textAlign: 'center' } },
+          doneCount + ' din ' + steps.length + ' pasi completati'
+        ),
+        steps.map(function(s, i) {
+          return h('div', { key: i, style: { display: 'flex', gap: 12, padding: '12px 0', borderBottom: i < steps.length - 1 ? '1px solid #f1f5f9' : 'none' } },
+            h('div', { style: { fontSize: 22, flexShrink: 0 } }, s.done ? '\u2705' : '\u2B1C'),
+            h('div', null,
+              h('div', { style: { fontWeight: 700, fontSize: 14.5, color: s.done ? '#94a3b8' : '#1a202c', textDecoration: s.done ? 'line-through' : 'none' } }, s.title),
+              h('div', { style: { fontSize: 12.5, color: '#64748b', marginTop: 3 } }, s.desc)
+            )
+          );
+        })
+      ),
+      h('div', { className: 'mfoot' },
+        h('button', { className: 'mcanc', onClick: props.onClose }, 'Inchide')
+      )
+    )
   );
 }
 
@@ -2518,6 +2593,19 @@ function Drawer(props) {
           h('div', { className: 'dsub-item', onClick: function() { props.onOpenPdf(); props.onClose(); } },
             h('span', { style: { fontSize: 15 } }, '\uD83D\uDDA8'),
             h('span', { className: 'dsub-lbl' }, 'Descarca / Tipareste PDF')
+          )
+        ),
+
+        // ══════════ CATEGORIA 5: AJUTOR ══════════
+        catHeader('help', '\u2753', 'Ajutor'),
+        openCategory === 'help' && h('div', { className: 'dexp' },
+          h('div', { className: 'dsub-item', onClick: function() { props.onOpenGuide(); props.onClose(); } },
+            h('span', { style: { fontSize: 15 } }, '\uD83D\uDCD6'),
+            h('span', { className: 'dsub-lbl' }, 'Ghid de pornire')
+          ),
+          h('a', { href: waUrl(SUPPORT_PHONE), target: '_blank', rel: 'noopener', className: 'dsub-item', style: { textDecoration: 'none', color: 'inherit' } },
+            h('span', { style: { fontSize: 15 } }, '\uD83D\uDCAC'),
+            h('span', { className: 'dsub-lbl' }, 'Contact suport')
           )
         )
       )

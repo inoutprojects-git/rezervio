@@ -16,6 +16,8 @@
       "$pensionId": {
         ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || root.child('users').child(auth.uid).child('pensionId').val() === $pensionId)",
 
+        ".write": "auth != null && !data.exists() && newData.child('ownerUid').val() === auth.uid",
+
         "plan": {
           ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (!data.exists() && root.child('users').child(auth.uid).child('pensionId').val() === $pensionId))"
         },

@@ -49,9 +49,51 @@
       <form id="signup-form" style="display:none;">
         <input type="email" id="signup-email" class="auth-input" placeholder="Email" required autocomplete="email">
         <input type="password" id="signup-password" class="auth-input" placeholder="Parola (minim 6 caractere)" required autocomplete="new-password" minlength="6">
+        <label style="display:flex;align-items:flex-start;gap:8px;margin-bottom:14px;font-size:12.5px;color:#64748b;cursor:pointer;line-height:1.4;">
+          <input type="checkbox" id="terms-checkbox" style="margin-top:2px;flex-shrink:0;width:16px;height:16px;">
+          <span>Sunt de acord cu <a href="#" id="open-terms" style="color:#2563eb;font-weight:600;">Termenii si Conditiile</a> si <a href="#" id="open-privacy" style="color:#2563eb;font-weight:600;">Politica de Confidentialitate</a></span>
+        </label>
         <div id="signup-error" class="auth-error"></div>
-        <button type="submit" id="signup-submit" class="auth-submit">Creeaza cont</button>
+        <button type="submit" id="signup-submit" class="auth-submit" disabled style="opacity:.5;">Creeaza cont</button>
       </form>
+    </div>
+  </div>
+
+  <!-- MODAL TERMENI SI CONDITII -->
+  <div id="terms-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;align-items:center;justify-content:center;padding:20px;">
+    <div style="background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:80vh;display:flex;flex-direction:column;">
+      <div style="padding:18px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;">
+        <strong style="font-size:17px;">Termeni si Conditii</strong>
+        <button id="close-terms" style="background:none;border:none;font-size:20px;cursor:pointer;color:#64748b;">&times;</button>
+      </div>
+      <div style="padding:20px;overflow-y:auto;font-size:13.5px;line-height:1.6;color:#374151;">
+        <p><strong>1. Obiectul contractului</strong><br>Rezervio este o platforma software-as-a-service (SaaS) pentru gestiunea rezervarilor in structuri de primire turistica mici (pensiuni). Prin crearea unui cont, utilizatorul (denumit in continuare "Client") accepta acesti termeni.</p>
+        <p><strong>2. Planuri si abonament</strong><br>Rezervio ofera 3 planuri (Basic, Standard, Premium), cu limite diferite de functionalitati si numar de conturi utilizator. Perioada initiala de 30 de zile este gratuita ("perioada de proba"). Dupa expirarea acesteia, continuarea folosirii aplicatiei necesita plata abonamentului conform planului ales, achitat prin transfer bancar sau alta metoda comunicata de operator.</p>
+        <p><strong>3. Raspunderea Clientului</strong><br>Clientul este singurul raspunzator de acuratetea datelor introduse (rezervari, date turisti, preturi). Rezervio nu isi asuma raspunderea pentru erori de tarifare, suprarezervari (overbooking) sau pierderi financiare rezultate din folosirea incorecta a aplicatiei.</p>
+        <p><strong>4. Disponibilitate si mentenanta</strong><br>Operatorul depune eforturi rezonabile pentru mentinerea disponibilitatii serviciului, dar nu garanteaza functionare neintrerupta 100%. Intreruperi pot aparea pentru mentenanta sau din cauza furnizorilor tehnici (Firebase/Google Cloud).</p>
+        <p><strong>5. Incetarea contului</strong><br>Clientul poate solicita oricand stergerea contului si a datelor asociate. Operatorul poate suspenda conturi cu plati restante sau folosire abuziva, cu notificare prealabila.</p>
+        <p><strong>6. Modificari</strong><br>Acesti termeni pot fi actualizati periodic. Continuarea folosirii aplicatiei dupa o modificare reprezinta acceptarea noilor termeni.</p>
+        <p style="color:#94a3b8;font-size:12px;margin-top:16px;">Ultima actualizare: August 2026. Pentru intrebari: foloseste optiunea "Contact suport" din aplicatie.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL POLITICA DE CONFIDENTIALITATE -->
+  <div id="privacy-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;align-items:center;justify-content:center;padding:20px;">
+    <div style="background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:80vh;display:flex;flex-direction:column;">
+      <div style="padding:18px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;">
+        <strong style="font-size:17px;">Politica de Confidentialitate</strong>
+        <button id="close-privacy" style="background:none;border:none;font-size:20px;cursor:pointer;color:#64748b;">&times;</button>
+      </div>
+      <div style="padding:20px;overflow-y:auto;font-size:13.5px;line-height:1.6;color:#374151;">
+        <p><strong>1. Ce date colectam</strong><br>Colectam: email si parola (autentificare), numele pensiunii si datele de contact ale acesteia, date de facturare (nume/CUI/CNP daca sunt introduse voluntar), si datele rezervarilor introduse de Client (nume oaspeti, telefoane, date de sejur).</p>
+        <p><strong>2. Scopul colectarii</strong><br>Datele sunt folosite exclusiv pentru functionarea aplicatiei: autentificare, gestiunea rezervarilor, comunicare cu Clientul privind contul si facturarea. Nu vindem si nu inchiriem datele catre terti.</p>
+        <p><strong>3. Stocare si securitate</strong><br>Datele sunt stocate pe infrastructura Firebase (Google Cloud), cu reguli de acces restrictionate pe rol (Owner, Staff, Administrator retea). Fiecare Client are acces doar la datele propriei pensiuni.</p>
+        <p><strong>4. Datele turistilor introduse de Client</strong><br>Clientul este operator de date pentru informatiile despre proprii oaspeti (fisa de sosire etc.), introduse conform obligatiilor legale (H.G. 237/2001). Rezervio actioneaza ca persoana imputernicita (procesator de date) in acest caz.</p>
+        <p><strong>5. Drepturile Clientului (GDPR)</strong><br>Ai dreptul de acces, rectificare, stergere si portabilitate a datelor tale. Poti solicita oricand exportul sau stergerea completa a contului, contactand suportul din aplicatie.</p>
+        <p><strong>6. Cookie-uri si stocare locala</strong><br>Aplicatia foloseste localStorage pentru a pastra sesiunea de autentificare si preferinte locale (nu cookie-uri de tracking/publicitate).</p>
+        <p style="color:#94a3b8;font-size:12px;margin-top:16px;">Ultima actualizare: August 2026. Pentru cereri privind datele tale personale, foloseste optiunea "Contact suport" din aplicatie.</p>
+      </div>
     </div>
   </div>
 
@@ -161,8 +203,10 @@
         var email = document.getElementById('signup-email').value.trim();
         var pass = document.getElementById('signup-password').value;
         if (pass.length < 6) { showError(signupError, 'Parola trebuie sa aiba minim 6 caractere.'); return; }
+        if (!termsCheckbox.checked) { showError(signupError, 'Trebuie sa accepti Termenii si Politica de Confidentialitate.'); return; }
         signupSubmit.disabled = true;
         signupSubmit.textContent = 'Se creeaza contul...';
+        window.PENDING_TERMS_ACCEPTED_AT = Date.now(); // citit la crearea inregistrarii users/{uid}
         fbAuth.createUserWithEmailAndPassword(email, pass)
           .catch(function(err) { showError(signupError, authErrMsg(err.code)); })
           .then(function() {
@@ -170,6 +214,23 @@
             signupSubmit.textContent = 'Creeaza cont';
           });
       });
+
+      // Checkbox Termeni — activeaza butonul de creare cont doar dupa bifare
+      var termsCheckbox = document.getElementById('terms-checkbox');
+      termsCheckbox.addEventListener('change', function() {
+        signupSubmit.disabled = !termsCheckbox.checked;
+        signupSubmit.style.opacity = termsCheckbox.checked ? '1' : '.5';
+      });
+
+      // Modale Termeni / Confidentialitate — deschidere/inchidere
+      var termsModal = document.getElementById('terms-modal');
+      var privacyModal = document.getElementById('privacy-modal');
+      document.getElementById('open-terms').addEventListener('click', function(e) { e.preventDefault(); termsModal.style.display = 'flex'; });
+      document.getElementById('open-privacy').addEventListener('click', function(e) { e.preventDefault(); privacyModal.style.display = 'flex'; });
+      document.getElementById('close-terms').addEventListener('click', function() { termsModal.style.display = 'none'; });
+      document.getElementById('close-privacy').addEventListener('click', function() { privacyModal.style.display = 'none'; });
+      termsModal.addEventListener('click', function(e) { if (e.target === termsModal) termsModal.style.display = 'none'; });
+      privacyModal.addEventListener('click', function(e) { if (e.target === privacyModal) privacyModal.style.display = 'none'; });
 
       forgotPasswordLink.addEventListener('click', function(e) {
         e.preventDefault();
@@ -202,7 +263,8 @@
                     email: user.email,
                     role: 'owner',
                     pensionId: newPensionId,
-                    createdAt: Date.now()
+                    createdAt: Date.now(),
+                    termsAcceptedAt: window.PENDING_TERMS_ACCEPTED_AT || Date.now()
                   }).then(function() {
                     return firebaseDB.ref('pensions/' + newPensionId).set({
                       ownerUid: user.uid,
