@@ -1,0 +1,57 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "users": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (root.child('users').child(auth.uid).child('role').val() === 'owner' && root.child('users').child(auth.uid).child('pensionId').val() === root.child('users').child($uid).child('pensionId').val()))",
+        ".write": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'network_admin')"
+      }
+    },
+
+    "pensions": {
+      "$pensionId": {
+        ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || root.child('users').child(auth.uid).child('pensionId').val() === $pensionId)",
+
+        "plan": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'network_admin'"
+        },
+        "status": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'network_admin'"
+        },
+        "accountCount": {
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (root.child('users').child(auth.uid).child('role').val() === 'owner' && root.child('users').child(auth.uid).child('pensionId').val() === $pensionId))"
+        },
+        "trialEndsAt": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'network_admin'"
+        },
+        "ownerUid": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'network_admin'"
+        },
+        "ownerEmail": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'network_admin'"
+        },
+        "createdAt": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'network_admin'"
+        },
+
+        "members": {
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (root.child('users').child(auth.uid).child('role').val() === 'owner' && root.child('users').child(auth.uid).child('pensionId').val() === $pensionId))"
+        },
+
+        "config": {
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (root.child('users').child(auth.uid).child('pensionId').val() === $pensionId && (root.child('users').child(auth.uid).child('role').val() === 'owner' || root.child('users').child(auth.uid).child('role').val() === 'staff')))"
+        },
+
+        "reservations": {
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (root.child('users').child(auth.uid).child('pensionId').val() === $pensionId && (root.child('users').child(auth.uid).child('role').val() === 'owner' || root.child('users').child(auth.uid).child('role').val() === 'staff')))"
+        },
+
+        "$other": {
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (root.child('users').child(auth.uid).child('role').val() === 'owner' && root.child('users').child(auth.uid).child('pensionId').val() === $pensionId))"
+        }
+      }
+    }
+  }
+}

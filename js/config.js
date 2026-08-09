@@ -13,6 +13,12 @@ var firebaseConfig = {
 var PENSION_ID = null;
 var firebaseDB = null;
 var firebaseAuth = null;
+var USER_ROLE = null;   // 'network_admin' | 'owner' | 'staff' — populat la login, inainte de startApp()
+
+// ── ROLURI SI PLANURI ────────────────────────────────────────────────────────
+// Limita de conturi (Owner + Staff) pe fiecare plan. Owner-ul se numara in limita.
+var PLAN_LIMITS = { basic: 1, standard: 3, premium: 10 };
+var PLAN_LABELS = { basic: 'Basic', standard: 'Standard', premium: 'Premium' };
 
 // ── CONSTANTS ──────────────────────────────────────────────────────────────────
 var WHOLE = '__ALL__'; // rezervare toata locatia

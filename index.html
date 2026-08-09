@@ -101,16 +101,35 @@
           if (user) {
             firebaseDB.ref('users/' + user.uid).once('value')
               .then(function(snap) {
-                var data = snap.val() || {};
-                PENSION_ID = data.pensionId || ('p_' + user.uid.slice(0, 8));
-                if (!snap.val()) {
+                var data = snap.val();
+                if (!data) {
+                  // Utilizator nou — devine automat Owner al unei pensiuni noi, plan Basic.
+                  var newPensionId = 'p_' + user.uid.slice(0, 8);
+                  PENSION_ID = newPensionId;
+                  USER_ROLE = 'owner';
+                  var trialEnds = Date.now() + 30 * 24 * 60 * 60 * 1000;
                   firebaseDB.ref('users/' + user.uid).set({
                     email: user.email,
-                    pensionName: 'Pensiunea Mea',
-                    pensionId: PENSION_ID,
-                    role: 'admin',
+                    role: 'owner',
+                    pensionId: newPensionId,
                     createdAt: Date.now()
                   }).catch(function(){});
+                  firebaseDB.ref('pensions/' + newPensionId).set({
+                    ownerUid: user.uid,
+                    ownerEmail: user.email,
+                    pensionName: 'Pensiunea Mea',
+                    plan: 'basic',
+                    status: 'active',
+                    accountCount: 1,
+                    trialEndsAt: trialEnds,
+                    createdAt: Date.now()
+                  }).catch(function(){});
+                  firebaseDB.ref('pensions/' + newPensionId + '/members/' + user.uid).set({
+                    email: user.email, role: 'owner', addedAt: Date.now()
+                  }).catch(function(){});
+                } else {
+                  USER_ROLE = data.role || 'owner';
+                  PENSION_ID = data.pensionId || null;
                 }
                 ls.style.display = 'none';
                 root.style.display = 'block';
@@ -118,6 +137,7 @@
               })
               .catch(function() {
                 PENSION_ID = 'p_' + user.uid.slice(0, 8);
+                USER_ROLE = 'owner';
                 ls.style.display = 'none';
                 root.style.display = 'block';
                 tryStartApp();
@@ -125,6 +145,7 @@
           } else {
             var wasRunning = appStarted;
             PENSION_ID = null;
+            USER_ROLE = null;
             ls.style.display = 'flex';
             root.style.display = 'none';
             if (wasRunning) {

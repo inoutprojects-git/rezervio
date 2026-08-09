@@ -32,6 +32,11 @@ function App() {
   var bis = useState(null); var billingInfo = bis[0], setBillingInfo = bis[1];
   var sbi = useState(false); var showBillingInfo = sbi[0], setShowBillingInfo = sbi[1];
   var wes = useState(function() { return lc.get('p_whole_enabled', true); }); var wholeEnabled = wes[0], setWholeEnabled = wes[1];
+  var pls = useState('basic'); var plan = pls[0], setPlan = pls[1];
+  var pst = useState('active'); var pensionStatus = pst[0], setPensionStatus = pst[1];
+  var pac = useState(1); var accountCount = pac[0], setAccountCount = pac[1];
+  var pmb = useState({}); var members = pmb[0], setMembers = pmb[1];
+  var stm = useState(false); var showTeam = stm[0], setShowTeam = stm[1];
   var afs = useState('future'); var activeFilter = afs[0], setActiveFilter = afs[1];
   var brs = useState(function() { return lc.get('p_bookrules', { minGapDays: 0, minNights: 0, minAdvanceDays: 0 }); }); var bookingRules = brs[0], setBookingRules = brs[1];
   var sbr = useState(false); var showBookingRules = sbr[0], setShowBookingRules = sbr[1];
@@ -63,11 +68,16 @@ function App() {
       var arr = data ? Object.keys(data).map(function(id) { return Object.assign({}, data[id], { id: id }); }) : [];
       setRes(arr); lc.set('p_res', arr); setSync('online'); setLoading(false);
     });
+    // Date de business (plan, status, echipa) — la radacina pensiunii, nu in config
+    var u3 = fb.on('plan', function(v) { if (v) setPlan(v); });
+    var u4 = fb.on('status', function(v) { if (v) setPensionStatus(v); });
+    var u5 = fb.on('accountCount', function(v) { if (v) setAccountCount(v); });
+    var u6 = fb.on('members', function(v) { setMembers(v || {}); });
     firebaseDB.ref('.info/connected').on('value', function(snap) {
       if (snap.val() === false) { setSync('offline'); setRes(lc.get('p_res', [])); setLoading(false); }
       else setSync('online');
     });
-    return function() { u1(); u2(); };
+    return function() { u1(); u2(); u3(); u4(); u5(); u6(); };
   }, []);
 
   // Date de facturare: legate de USER (cont), nu de pensiune — separat de fb.on() de mai sus,
@@ -220,6 +230,50 @@ function App() {
     }).catch(function(err) { console.error('toggleWholeEnabled error:', err); });
   }
 
+  // ── GESTIUNE ECHIPA (Owner invita/elimina conturi Staff) ────────────────────
+  // Limita de conturi (Owner + Staff) e blocare HARD, verificata inainte de invitare.
+  function inviteStaff(email, tempPassword) {
+    var limit = PLAN_LIMITS[plan] || 1;
+    if (accountCount >= limit) {
+      return Promise.reject(new Error('Ai atins limita planului ' + (PLAN_LABELS[plan] || plan) + ' (' + limit + ' conturi). Elimina un cont sau treci la un plan superior.'));
+    }
+    // Truc necesar: crearea unui cont nou cu Firebase Auth client SDK logheaza automat
+    // acel cont, inlocuind sesiunea curenta. Folosim o instanta Firebase secundara,
+    // izolata, doar pentru crearea contului, ca sa nu deconectam owner-ul.
+    var secondaryName = 'Secondary_' + Date.now();
+    var secondaryApp = firebase.initializeApp(firebaseConfig, secondaryName);
+    return secondaryApp.auth().createUserWithEmailAndPassword(email, tempPassword)
+      .then(function(cred) {
+        var newUid = cred.user.uid;
+        return firebaseDB.ref('users/' + newUid).set({
+          email: email, role: 'staff', pensionId: PENSION_ID, createdAt: Date.now()
+        }).then(function() {
+          return firebaseDB.ref('pensions/' + PENSION_ID + '/members/' + newUid).set({
+            email: email, role: 'staff', addedAt: Date.now()
+          });
+        }).then(function() {
+          return firebaseDB.ref('pensions/' + PENSION_ID + '/accountCount').set(accountCount + 1);
+        });
+      })
+      .then(function() { return secondaryApp.auth().signOut(); })
+      .then(function() { return secondaryApp.delete(); })
+      .catch(function(err) {
+        secondaryApp.delete().catch(function(){});
+        throw err;
+      });
+  }
+
+  // NOTA: eliminarea unui membru sterge accesul lui la datele pensiunii (prin stergerea
+  // din users/ si members/), dar contul Firebase Auth in sine ramane tehnic valid —
+  // stergerea completa a contului Auth necesita Admin SDK / Cloud Function, in afara
+  // arhitecturii curente 100% client. Odata eliminat, membrul nu mai are pensionId
+  // valid, deci Firebase Rules ii refuza orice citire/scriere pe datele pensiunii.
+  function removeStaff(uid) {
+    return firebaseDB.ref('pensions/' + PENSION_ID + '/members/' + uid).remove()
+      .then(function() { return firebaseDB.ref('users/' + uid).remove(); })
+      .then(function() { return firebaseDB.ref('pensions/' + PENSION_ID + '/accountCount').set(Math.max(1, accountCount - 1)); });
+  }
+
   // Datele de facturare se scriu sub users/{uid}, NU sub pensions/{PENSION_ID} — sunt legate
   // de persoana/firma care detine contul, nu de pensiune (relevant mai ales daca un cont va
   // putea gestiona multiple pensiuni in viitor).
@@ -248,6 +302,17 @@ function App() {
     return h('div', { className: 'ldg' },
       h('div', { className: 'spin' }),
       h('div', { style: { fontSize: 15, fontWeight: 600, color: '#64748b' } }, 'Se incarca...')
+    );
+  }
+
+  // Cont suspendat de Administratorul retea — blocheaza accesul complet la continut,
+  // indiferent de rol (owner/staff). Doar network_admin nu ajunge niciodata aici.
+  if (pensionStatus === 'suspended') {
+    return h('div', { className: 'ldg' },
+      h('div', { style: { fontSize: 48 } }, '\uD83D\uDD12'),
+      h('div', { style: { fontSize: 18, fontWeight: 800, color: '#1a202c' } }, 'Cont suspendat'),
+      h('div', { style: { fontSize: 14, color: '#64748b', textAlign: 'center', maxWidth: 300 } }, 'Accesul la aceasta pensiune a fost suspendat. Contacteaza administratorul pentru detalii.'),
+      h('button', { style: { marginTop: 12, padding: '10px 20px', background: '#f1f5f9', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer' }, onClick: function() { firebase.auth().signOut(); } }, 'Deconectare')
     );
   }
 
@@ -297,6 +362,8 @@ function App() {
       onOpenAvailability: function() { setShowAvailability(true); },
       wholeEnabled: wholeEnabled,
       onToggleWholeEnabled: toggleWholeEnabled,
+      userRole: USER_ROLE, plan: plan, accountCount: accountCount,
+      onOpenTeam: function() { setShowTeam(true); },
       onClose: function() { setDrawerOpen(false); }
     }),
     // PENDING BANNER
@@ -382,12 +449,150 @@ function App() {
       onNew: function(room, prefill) { setShowAvailability(false); openNew(room, prefill); },
       onClose: function() { setShowAvailability(false); }
     }),
+    showTeam && h(TeamMgr, {
+      plan: plan, accountCount: accountCount, members: members,
+      onInvite: inviteStaff, onRemove: removeStaff,
+      onClose: function() { setShowTeam(false); }
+    }),
     confirm && h(Confirm, { msg: confirm.msg, okLbl: confirm.okLbl, ok: confirm.ok, onCancel: function() { setConfirm(null); } })
   );
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// NETWORK ADMIN DASHBOARD — ecran separat, doar pentru role === 'network_admin'
+// Vede toate pensiunile, poate schimba plan/status/trial. NU editeaza rezervari
+// direct (pentru asta, Firebase Console ramane calea pentru cazuri exceptionale).
+// ══════════════════════════════════════════════════════════════════════════
+function NetworkAdminDashboard() {
+  var ls = useState(true); var loading = ls[0], setLoading = ls[1];
+  var ps = useState([]); var pensionsList = ps[0], setPensionsList = ps[1];
+  var bp = useState({}); var busy = bp[0], setBusy = bp[1]; // { [pensionId]: true } cat timp o actiune e in curs
+
+  useEffect(function() {
+    if (!firebaseDB) { setLoading(false); return; }
+    var ref = firebaseDB.ref('pensions');
+    var cb = function(snap) {
+      var data = snap.val() || {};
+      var arr = Object.keys(data).map(function(id) { return Object.assign({ id: id }, data[id]); });
+      arr.sort(function(a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
+      setPensionsList(arr);
+      setLoading(false);
+    };
+    ref.on('value', cb, function(err) { console.error('NetworkAdminDashboard read error:', err); setLoading(false); });
+    return function() { ref.off('value', cb); };
+  }, []);
+
+  function setBusyFor(id, val) { setBusy(function(prev) { return Object.assign({}, prev, { [id]: val }); }); }
+
+  function changePlan(id, newPlan) {
+    setBusyFor(id, true);
+    firebaseDB.ref('pensions/' + id + '/plan').set(newPlan)
+      .catch(function(err) { alert('Eroare: ' + err.message); })
+      .then(function() { setBusyFor(id, false); });
+  }
+
+  function toggleStatus(id, currentStatus) {
+    var next = currentStatus === 'suspended' ? 'active' : 'suspended';
+    setBusyFor(id, true);
+    firebaseDB.ref('pensions/' + id + '/status').set(next)
+      .catch(function(err) { alert('Eroare: ' + err.message); })
+      .then(function() { setBusyFor(id, false); });
+  }
+
+  function extendTrial(id, currentTrialEndsAt) {
+    var base = currentTrialEndsAt && currentTrialEndsAt > Date.now() ? currentTrialEndsAt : Date.now();
+    var next = base + 7 * 24 * 60 * 60 * 1000;
+    setBusyFor(id, true);
+    firebaseDB.ref('pensions/' + id + '/trialEndsAt').set(next)
+      .catch(function(err) { alert('Eroare: ' + err.message); })
+      .then(function() { setBusyFor(id, false); });
+  }
+
+  if (loading) {
+    return h('div', { className: 'ldg' },
+      h('div', { className: 'spin' }),
+      h('div', { style: { fontSize: 15, fontWeight: 600, color: '#64748b' } }, 'Se incarca pensiunile...')
+    );
+  }
+
+  return h('div', { className: 'app' },
+    h('header', { style: { background: 'linear-gradient(135deg,#1e3a5f,#1d4ed8)', color: '#fff', padding: '16px', position: 'sticky', top: 0, zIndex: 60, boxShadow: '0 2px 16px rgba(0,0,0,.22)' } },
+      h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: 900, margin: '0 auto' } },
+        h('div', null,
+          h('div', { style: { fontSize: 19, fontWeight: 800 } }, '\uD83D\uDEE1\uFE0F Administrator retea'),
+          h('div', { style: { fontSize: 13, opacity: .8, marginTop: 2 } }, pensionsList.length + ' pensiuni inregistrate')
+        ),
+        h('button', { style: { padding: '9px 16px', background: 'rgba(255,255,255,.15)', border: '1.5px solid rgba(255,255,255,.25)', color: '#fff', borderRadius: 9, fontWeight: 700, cursor: 'pointer' }, onClick: function() { firebase.auth().signOut(); } }, 'Deconectare')
+      )
+    ),
+    h('div', { className: 'page', style: { maxWidth: 900 } },
+      pensionsList.length === 0
+        ? h('div', { style: { textAlign: 'center', padding: '40px 20px', color: '#94a3b8' } }, 'Nicio pensiune inregistrata inca.')
+        : pensionsList.map(function(p) {
+            var limit = PLAN_LIMITS[p.plan] || 1;
+            var isBusy = !!busy[p.id];
+            var trialDate = p.trialEndsAt ? fmt(new Date(p.trialEndsAt).toISOString().slice(0, 10)) : '-';
+            var trialExpired = p.trialEndsAt && p.trialEndsAt < Date.now();
+            return h('div', { key: p.id, className: 'card', style: { padding: 16 } },
+              h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 8 } },
+                h('div', null,
+                  h('div', { style: { fontSize: 17, fontWeight: 800, color: '#1a202c' } }, p.pensionName || '(fara nume)'),
+                  h('div', { style: { fontSize: 13, color: '#64748b', marginTop: 2 } }, p.ownerEmail || '-')
+                ),
+                h('span', {
+                  style: {
+                    fontSize: 12, fontWeight: 800, padding: '5px 12px', borderRadius: 20,
+                    background: p.status === 'suspended' ? '#fee2e2' : '#dcfce7',
+                    color: p.status === 'suspended' ? '#dc2626' : '#15803d'
+                  }
+                }, p.status === 'suspended' ? '\uD83D\uDD12 SUSPENDAT' : '\u2713 ACTIV')
+              ),
+              h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 14 } },
+                h('div', null,
+                  h('div', { style: { fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' } }, 'Conturi'),
+                  h('div', { style: { fontSize: 15, fontWeight: 700, color: (p.accountCount || 1) >= limit ? '#dc2626' : '#1a202c' } }, (p.accountCount || 1) + ' / ' + limit)
+                ),
+                h('div', null,
+                  h('div', { style: { fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' } }, 'Trial expira'),
+                  h('div', { style: { fontSize: 15, fontWeight: 700, color: trialExpired ? '#dc2626' : '#1a202c' } }, trialDate)
+                ),
+                h('div', null,
+                  h('div', { style: { fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' } }, 'Inregistrat'),
+                  h('div', { style: { fontSize: 15, fontWeight: 700, color: '#1a202c' } }, p.createdAt ? fmt(new Date(p.createdAt).toISOString().slice(0, 10)) : '-')
+                )
+              ),
+              h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } },
+                h('select', {
+                  className: 'finp', style: { width: 'auto', padding: '8px 10px', fontSize: 13 },
+                  value: p.plan || 'basic', disabled: isBusy,
+                  onChange: function(e) { changePlan(p.id, e.target.value); }
+                },
+                  h('option', { value: 'basic' }, 'Basic (1 cont)'),
+                  h('option', { value: 'standard' }, 'Standard (3 conturi)'),
+                  h('option', { value: 'premium' }, 'Premium (10 conturi)')
+                ),
+                h('button', {
+                  style: { padding: '8px 14px', background: p.status === 'suspended' ? '#16a34a' : '#dc2626', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' },
+                  disabled: isBusy, onClick: function() { toggleStatus(p.id, p.status); }
+                }, p.status === 'suspended' ? 'Reactiveaza' : 'Suspenda'),
+                h('button', {
+                  style: { padding: '8px 14px', background: '#f1f5f9', color: '#374151', border: '1.5px solid #d1d9e0', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' },
+                  disabled: isBusy, onClick: function() { extendTrial(p.id, p.trialEndsAt); }
+                }, '+7 zile trial')
+              )
+            );
+          })
+    )
+  );
+}
+
 function startApp() {
-  createRoot(document.getElementById('root')).render(h(App));
+  var root = createRoot(document.getElementById('root'));
+  if (USER_ROLE === 'network_admin') {
+    root.render(h(NetworkAdminDashboard));
+  } else {
+    root.render(h(App));
+  }
 }
 // Expus global: onAuthStateChanged (primul <script> din pagina, ruleaza inainte
 // ca acest al doilea script sa fie parsat) are nevoie sa apeleze startApp() dupa
@@ -679,6 +884,87 @@ function BookingRulesSettings(props) {
         h('button', { className: 'msave', disabled: saving, onClick: handleSave }, saving ? 'Se salveaza...' : '\u2713 Salveaza')
       )
     )
+  );
+}
+
+// ── GESTIUNE ECHIPA (Owner invita/elimina conturi Staff) ─────────────────────
+function TeamMgr(props) {
+  var limit = PLAN_LIMITS[props.plan] || 1;
+  var atLimit = props.accountCount >= limit;
+  var members = props.members || {};
+  var memberList = Object.keys(members).map(function(uid) { return Object.assign({ uid: uid }, members[uid]); });
+  memberList.sort(function(a, b) { return a.role === 'owner' ? -1 : b.role === 'owner' ? 1 : 0; });
+
+  var es = useState(''); var email = es[0], setEmail = es[1];
+  var ps = useState(''); var pass = ps[0], setPass = ps[1];
+  var sv = useState(false); var saving = sv[0], setSaving = sv[1];
+  var er = useState(''); var error = er[0], setError = er[1];
+  var delUid = useState(null); var toDelete = delUid[0], setToDelete = delUid[1];
+
+  function handleInvite() {
+    setError('');
+    if (!email.trim() || !email.includes('@')) { setError('Introdu un email valid.'); return; }
+    if (!pass || pass.length < 6) { setError('Parola temporara trebuie sa aiba minim 6 caractere.'); return; }
+    setSaving(true);
+    props.onInvite(email.trim(), pass)
+      .then(function() { setSaving(false); setEmail(''); setPass(''); })
+      .catch(function(err) { setSaving(false); setError(err.message); });
+  }
+
+  function handleRemove(uid) {
+    props.onRemove(uid).then(function() { setToDelete(null); }).catch(function(err) { alert('Eroare: ' + err.message); });
+  }
+
+  return h('div', { className: 'ov', onClick: props.onClose },
+    h('div', { className: 'mdl', onClick: function(e) { e.stopPropagation(); } },
+      h('div', { className: 'mhdr' },
+        h('span', { className: 'mtit' }, '\uD83D\uDC65 Echipa'),
+        h('button', { className: 'mclose', onClick: props.onClose }, '\u2715')
+      ),
+      h('div', { className: 'mbody' },
+        h('div', { style: { fontSize: 13, fontWeight: 700, color: '#1e3a5f', marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: atLimit ? '#fef2f2' : '#eff6ff', borderRadius: 9 } },
+          h('span', null, 'Plan ' + (PLAN_LABELS[props.plan] || props.plan) + ': ' + props.accountCount + '/' + limit + ' conturi folosite'),
+          atLimit && h('span', { style: { color: '#dc2626' } }, '\u26A0\uFE0F Limita atinsa')
+        ),
+
+        // Lista membri existenti
+        memberList.map(function(m) {
+          return h('div', { key: m.uid, style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 12px', background: '#f8fafc', borderRadius: 9, marginBottom: 8, gap: 10 } },
+            h('div', { style: { flex: 1, minWidth: 0 } },
+              h('div', { style: { fontWeight: 700, fontSize: 14, color: '#1a202c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, m.email),
+              h('div', { style: { fontSize: 11.5, fontWeight: 700, color: m.role === 'owner' ? '#7c3aed' : '#64748b', marginTop: 2 } }, m.role === 'owner' ? 'OWNER' : 'STAFF')
+            ),
+            m.role !== 'owner' && h('button', {
+              style: { padding: '7px 12px', background: '#fef2f2', color: '#dc2626', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer', flexShrink: 0 },
+              onClick: function() { setToDelete(m.uid); }
+            }, 'Elimina')
+          );
+        }),
+
+        h('div', { className: 'ddiv', style: { margin: '16px 0' } }),
+
+        // Formular invitare
+        h('div', { style: { fontSize: 13, fontWeight: 800, color: '#1a202c', marginBottom: 10 } }, 'Invita cont nou (Staff)'),
+        atLimit
+          ? h('div', { style: { fontSize: 13, color: '#dc2626', padding: '12px', background: '#fef2f2', borderRadius: 9 } }, 'Ai atins limita planului ' + (PLAN_LABELS[props.plan] || props.plan) + '. Elimina un cont existent sau treci la un plan superior pentru a invita altii.')
+          : h('div', { className: 'fgrid1' },
+              error && h('div', { style: { color: '#dc2626', fontSize: 12.5, fontWeight: 600, marginBottom: 4 } }, error),
+              h(Field, { lbl: 'Email' }, h('input', { className: 'finp', type: 'email', value: email, placeholder: 'staff@exemplu.ro', onChange: function(e) { setEmail(e.target.value); } })),
+              h(Field, { lbl: 'Parola temporara' }, h('input', { className: 'finp', type: 'text', value: pass, placeholder: 'Minim 6 caractere', onChange: function(e) { setPass(e.target.value); } })),
+              h('div', { style: { fontSize: 11.5, color: '#94a3b8' } }, 'Comunica parola manual noului membru — o poate schimba din Contul meu dupa prima logare.')
+            )
+      ),
+      h('div', { className: 'mfoot' },
+        h('button', { className: 'mcanc', onClick: props.onClose }, 'Inchide'),
+        !atLimit && h('button', { className: 'msave', disabled: saving, onClick: handleInvite }, saving ? 'Se invita...' : '+ Invita')
+      )
+    ),
+    toDelete && h(Confirm, {
+      msg: 'Elimini acest membru din echipa? Nu va mai avea acces la datele pensiunii.',
+      okLbl: 'Elimina',
+      ok: function() { handleRemove(toDelete); },
+      onCancel: function() { setToDelete(null); }
+    })
   );
 }
 
@@ -2149,8 +2435,8 @@ function Drawer(props) {
             )
           ),
 
-          // ── Toata locatia (toggle simplu, fara sub-meniu) ──
-          h('div', { className: 'dsub-item', onClick: props.onToggleWholeEnabled },
+          // ── Toata locatia (toggle simplu, fara sub-meniu — doar Owner poate schimba) ──
+          h('div', { className: 'dsub-item', onClick: props.userRole === 'owner' ? props.onToggleWholeEnabled : undefined, style: { cursor: props.userRole === 'owner' ? 'pointer' : 'default' } },
             h('span', { style: { fontSize: 15 } }, '\uD83C\uDFE0'),
             h('span', { className: 'dsub-lbl' }, 'Toata locatia'),
             h('span', {
@@ -2163,8 +2449,8 @@ function Drawer(props) {
           ),
           h('div', { style: { fontSize: 11.5, color: '#94a3b8', padding: '0 18px 8px 44px' } }, 'Permite rezervarea intregii proprietati ca unitate unica'),
 
-          // ── Reguli de cazare ──
-          h('div', { className: 'dsub-item', onClick: function() { props.onOpenBookingRules(); props.onClose(); } },
+          // ── Reguli de cazare (regula de business — doar Owner) ──
+          props.userRole === 'owner' && h('div', { className: 'dsub-item', onClick: function() { props.onOpenBookingRules(); props.onClose(); } },
             h('span', { style: { fontSize: 15 } }, '\uD83D\uDECF\uFE0F'),
             h('span', { className: 'dsub-lbl' }, 'Reguli de cazare')
           ),
@@ -2205,7 +2491,10 @@ function Drawer(props) {
         // ══════════ CATEGORIA 4: CONT SI FACTURARE ══════════
         catHeader('account', '\uD83D\uDC64', 'Cont si facturare'),
         openCategory === 'account' && h('div', { className: 'dexp' },
-          h('div', { className: 'dsub-item', onClick: function() { props.onOpenPensionSettings(); props.onClose(); } },
+          props.userRole === 'owner' && h('div', { style: { padding: '8px 18px 4px' } },
+            h('span', { style: { fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: 20, background: '#eff6ff', color: '#1e40af' } }, 'Plan ' + (PLAN_LABELS[props.plan] || props.plan))
+          ),
+          props.userRole === 'owner' && h('div', { className: 'dsub-item', onClick: function() { props.onOpenPensionSettings(); props.onClose(); } },
             h('span', { style: { fontSize: 15 } }, '\uD83C\uDFE1'),
             h('span', { className: 'dsub-lbl' }, props.pensionName || 'Numeste pensiunea')
           ),
@@ -2213,7 +2502,14 @@ function Drawer(props) {
             h('span', { style: { fontSize: 15 } }, '\uD83D\uDC64'),
             h('span', { className: 'dsub-lbl' }, props.userEmail || 'Cont')
           ),
-          h('div', { className: 'dsub-item', onClick: function() { props.onOpenBillingInfo(); props.onClose(); } },
+          props.userRole === 'owner' && h('div', { className: 'dsub-item', style: { justifyContent: 'space-between' }, onClick: function() { props.onOpenTeam(); props.onClose(); } },
+            h('span', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+              h('span', { style: { fontSize: 15 } }, '\uD83D\uDC65'),
+              h('span', { className: 'dsub-lbl' }, 'Echipa')
+            ),
+            h('span', { style: { fontSize: 11, fontWeight: 700, color: '#64748b' } }, props.accountCount + '/' + (PLAN_LIMITS[props.plan] || 1))
+          ),
+          props.userRole === 'owner' && h('div', { className: 'dsub-item', onClick: function() { props.onOpenBillingInfo(); props.onClose(); } },
             h('span', { style: { fontSize: 15 } }, '\uD83E\uDDFE'),
             h('span', { className: 'dsub-lbl' }, props.billingInfo
               ? (props.billingInfo.type === 'pj' ? (props.billingInfo.companyName || 'Date facturare') : (props.billingInfo.fullName || 'Date facturare'))
