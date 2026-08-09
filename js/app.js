@@ -31,6 +31,7 @@ function App() {
   var mrs = useState(null); var msgRes = mrs[0], setMsgRes = mrs[1];
   var bis = useState(null); var billingInfo = bis[0], setBillingInfo = bis[1];
   var sbi = useState(false); var showBillingInfo = sbi[0], setShowBillingInfo = sbi[1];
+  var wes = useState(function() { return lc.get('p_whole_enabled', true); }); var wholeEnabled = wes[0], setWholeEnabled = wes[1];
   var afs = useState('future'); var activeFilter = afs[0], setActiveFilter = afs[1];
   var brs = useState(function() { return lc.get('p_bookrules', { minGapDays: 0, minNights: 0, minAdvanceDays: 0 }); }); var bookingRules = brs[0], setBookingRules = brs[1];
   var sbr = useState(false); var showBookingRules = sbr[0], setShowBookingRules = sbr[1];
@@ -55,6 +56,7 @@ function App() {
         if (cfg.pensionName !== undefined) { setPensionName(cfg.pensionName); lc.set('p_name', cfg.pensionName); }
         if (cfg.pensionPhoto !== undefined) { setPensionPhoto(cfg.pensionPhoto); lc.set('p_photo', cfg.pensionPhoto); }
         if (cfg.bookingRules) { setBookingRules(cfg.bookingRules); lc.set('p_bookrules', cfg.bookingRules); }
+        if (cfg.wholeEnabled !== undefined) { setWholeEnabled(cfg.wholeEnabled); lc.set('p_whole_enabled', cfg.wholeEnabled); }
       }
     });
     var u2 = fb.on('reservations', function(data) {
@@ -83,7 +85,7 @@ function App() {
   // campuri precum pensionName/pensionPhoto cand se salveaza doar camere/surse, sau invers.
   function saveConfig(partial) {
     setSync('syncing');
-    var merged = Object.assign({}, { rooms: rooms, sources: sources, roomPrices: roomPrices, pensionName: pensionName, pensionPhoto: pensionPhoto, bookingRules: bookingRules }, partial);
+    var merged = Object.assign({}, { rooms: rooms, sources: sources, roomPrices: roomPrices, pensionName: pensionName, pensionPhoto: pensionPhoto, bookingRules: bookingRules, wholeEnabled: wholeEnabled }, partial);
     return fb.set('config', merged).then(function() { setSync('online'); }).catch(function(err) {
       console.error('saveConfig error:', err);
       setSync('error');
@@ -210,6 +212,14 @@ function App() {
     });
   }
 
+  // Activeaza/dezactiveaza optiunea "Toata locatia" din formularul de rezervare
+  function toggleWholeEnabled() {
+    var next = !wholeEnabled;
+    saveConfig({ wholeEnabled: next }).then(function() {
+      setWholeEnabled(next); lc.set('p_whole_enabled', next);
+    }).catch(function(err) { console.error('toggleWholeEnabled error:', err); });
+  }
+
   // Datele de facturare se scriu sub users/{uid}, NU sub pensions/{PENSION_ID} — sunt legate
   // de persoana/firma care detine contul, nu de pensiune (relevant mai ales daca un cont va
   // putea gestiona multiple pensiuni in viitor).
@@ -285,6 +295,8 @@ function App() {
       onOpenMessages: function() { setMsgRes(null); setShowMessages(true); },
       onOpenBookingRules: function() { setShowBookingRules(true); },
       onOpenAvailability: function() { setShowAvailability(true); },
+      wholeEnabled: wholeEnabled,
+      onToggleWholeEnabled: toggleWholeEnabled,
       onClose: function() { setDrawerOpen(false); }
     }),
     // PENDING BANNER
@@ -315,7 +327,7 @@ function App() {
     tab === 'stats' && h(StatsTab, { rooms: rooms, sources: sources, reservations: reservations }),
     tab === 'archive' && h(ArchiveTab, { rooms: rooms, sources: sources, reservations: reservations, onEdit: openEdit, onCopy: openCopy, onMove: openMove, onDelete: delRes, onSendMsg: function(r) { setMsgRes(r); setShowMessages(true); }, onSaveGuestDetails: saveGuestDetails, pensionName: pensionName }),
     // MODALS
-    modal && h(ResMdl, { modal: modal, onSave: saveRes, onClose: function() { setModal(null); }, rooms: rooms, sources: sources, reservations: reservations, bookingRules: bookingRules }),
+    modal && h(ResMdl, { modal: modal, onSave: saveRes, onClose: function() { setModal(null); }, rooms: rooms, sources: sources, reservations: reservations, bookingRules: bookingRules, wholeEnabled: wholeEnabled }),
     showRooms && h(RoomMgr, { rooms: rooms, reservations: reservations, onSave: saveRooms, onClose: function() { setShowRooms(false); } }),
     showSrc && h(SrcMgr, { sources: sources, onSave: saveSrc, onClose: function() { setShowSrc(false); } }),
     showPensionSettings && h(PensionSettings, { pensionName: pensionName, pensionPhoto: pensionPhoto, onSave: savePensionSettings, onClose: function() { setShowPensionSettings(false); } }),
@@ -366,7 +378,7 @@ function App() {
       onClose: function() { setShowBookingRules(false); }
     }),
     showAvailability && h(AvailabilitySearch, {
-      rooms: rooms, reservations: reservations, bookingRules: bookingRules,
+      rooms: rooms, reservations: reservations, bookingRules: bookingRules, wholeEnabled: wholeEnabled,
       onNew: function(room, prefill) { setShowAvailability(false); openNew(room, prefill); },
       onClose: function() { setShowAvailability(false); }
     }),
@@ -519,7 +531,8 @@ function RoomMgr(props) {
 function AvailabilitySearch(props) {
   var rooms = props.rooms, reservations = props.reservations, bookingRules = props.bookingRules || {};
   var cs = useState(todayStr()); var checkIn = cs[0], setCheckIn = cs[1];
-  var ns = useState(1); var nights = ns[0], setNights = ns[1];
+  var ns = useState('1'); var nightsStr = ns[0], setNightsStr = ns[1];
+  var nights = parseInt(nightsStr) || 0;
 
   var checkOut = addDays(checkIn, nights);
 
@@ -547,6 +560,17 @@ function AvailabilitySearch(props) {
     });
   }, [rooms, reservations, checkIn, nights, bookingRules]);
 
+  // "Toata locatia" ca unitate separata de rezervare — libera doar daca TOATE camerele
+  // individuale sunt libere (nicio camera ocupata sau cu gap necesar).
+  var wholeStatus = useMemo(function() {
+    if (!props.wholeEnabled || !checkIn || !nights) return null;
+    var anyOccupied = results.some(function(r) { return r.status === 'occupied'; });
+    var anyGap = results.some(function(r) { return r.status === 'gap'; });
+    if (anyOccupied) return { status: 'occupied', detail: 'Cel putin o camera e deja ocupata in acest interval' };
+    if (anyGap) return { status: 'gap', detail: 'Cel putin o camera necesita pauza inainte de aceasta data' };
+    return { status: 'free', detail: null };
+  }, [results, props.wholeEnabled, checkIn, nights]);
+
   var statusMeta = {
     free: { label: 'Libera', color: '#16a34a', bg: '#dcfce7', icon: '\uD83D\uDFE2' },
     gap: { label: 'Libera, dar necesita pauza', color: '#d97706', bg: '#fef3c7', icon: '\uD83D\uDFE1' },
@@ -562,10 +586,25 @@ function AvailabilitySearch(props) {
       h('div', { className: 'mbody' },
         h('div', { className: 'fgrid' },
           h(Field, { lbl: 'Data check-in', req: true }, h('input', { className: 'finp', type: 'date', value: checkIn, onChange: function(e) { setCheckIn(e.target.value); } })),
-          h(Field, { lbl: 'Nopti' }, h('input', { className: 'finp', type: 'number', min: 1, value: nights, onFocus: function(e) { e.target.select(); }, onChange: function(e) { setNights(parseInt(e.target.value) || 1); } })),
+          h(Field, { lbl: 'Nopti' }, h('input', { className: 'finp', type: 'number', min: 1, value: nightsStr, onFocus: function(e) { e.target.select(); }, onChange: function(e) { setNightsStr(e.target.value); }, onBlur: function() { if (!parseInt(nightsStr)) setNightsStr('1'); } })),
           h(Field, { lbl: 'Check-out' }, h('input', { className: 'finp ro', readOnly: true, value: fmt(checkOut) }))
         ),
         h('div', { style: { marginTop: 16 } },
+          // Rand separat pentru "Toata locatia", daca e activata din Configurare
+          wholeStatus && h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: statusMeta[wholeStatus.status].bg, borderRadius: 10, marginBottom: 12, gap: 10, border: '1.5px dashed ' + statusMeta[wholeStatus.status].color } },
+            h('div', { style: { flex: 1, minWidth: 0 } },
+              h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+                h('span', null, '\uD83C\uDFE0'),
+                h('span', { style: { fontWeight: 800, fontSize: 15, color: '#1a202c' } }, 'Toata locatia'),
+                h('span', { style: { fontSize: 12, fontWeight: 700, color: statusMeta[wholeStatus.status].color } }, statusMeta[wholeStatus.status].label)
+              ),
+              wholeStatus.detail && h('div', { style: { fontSize: 12, color: '#64748b', marginTop: 2 } }, wholeStatus.detail)
+            ),
+            wholeStatus.status === 'free' && h('button', {
+              style: { padding: '8px 14px', background: '#92400e', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer', flexShrink: 0 },
+              onClick: function() { props.onNew(WHOLE, { checkIn: checkIn, nights: nights }); }
+            }, '+ Rezerva')
+          ),
           results.map(function(r) {
             var meta = statusMeta[r.status];
             return h('div', { key: r.room, style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: meta.bg, borderRadius: 10, marginBottom: 8, gap: 10 } },
@@ -651,6 +690,7 @@ function ResMdl(props) {
   var initForm = Object.assign({}, EMPTY_RES, { source: sources[0] || '' }, modal.data);
   var fs = useState(initForm);
   var form = fs[0], setForm = fs[1];
+  var nss = useState(String(initForm.nights || 1)); var nightsStr = nss[0], setNightsStr = nss[1];
 
   var isEdit = modal.mode === 'edit';
   var checkOut = addDays(form.checkIn, form.nights || 0);
@@ -730,7 +770,7 @@ function ResMdl(props) {
           h(Field, { lbl: 'Camera', req: true },
             h('select', { className: 'finp', value: form.room, onChange: function(e) { set('room', e.target.value); } },
               h('option', { value: '' }, '-- Selecteaza --'),
-              h('option', { value: WHOLE, style: { fontWeight: 700, color: '#92400e' } }, '\uD83C\uDFE0 Toata locatia (toate camerele)'),
+              props.wholeEnabled !== false && h('option', { value: WHOLE, style: { fontWeight: 700, color: '#92400e' } }, '\uD83C\uDFE0 Toata locatia (toate camerele)'),
               rooms.map(function(r) { return h('option', { key: r }, r); })
             )
           ),
@@ -749,7 +789,19 @@ function ResMdl(props) {
             )
           ),
           h(Field, { lbl: 'Check-in', req: true }, h('input', { className: 'finp', type: 'date', value: form.checkIn || '', onChange: function(e) { set('checkIn', e.target.value); } })),
-          h(Field, { lbl: 'Nopti' }, h('input', { className: 'finp', type: 'number', min: 1, value: form.nights, onFocus: function(e) { e.target.select(); }, onChange: function(e) { set('nights', parseInt(e.target.value) || 1); } })),
+          h(Field, { lbl: 'Nopti' }, h('input', {
+            className: 'finp', type: 'number', min: 1, value: nightsStr,
+            onFocus: function(e) { e.target.select(); },
+            onChange: function(e) {
+              var v = e.target.value;
+              setNightsStr(v);
+              var n = parseInt(v);
+              if (n > 0) set('nights', n);
+            },
+            onBlur: function() {
+              if (!parseInt(nightsStr) || parseInt(nightsStr) < 1) setNightsStr(String(form.nights || 1));
+            }
+          })),
           h(Field, { lbl: 'Check-out' }, h('input', { className: 'finp ro', readOnly: true, value: fmt(checkOut) })),
           h(Field, { lbl: 'Tarif/noapte (lei)' }, h('input', { className: 'finp', type: 'number', min: 0, value: form.pricePerNight, onFocus: function(e) { e.target.select(); }, onChange: function(e) { set('pricePerNight', parseFloat(e.target.value) || 0); } })),
           h(Field, { lbl: 'Total (lei)' }, h('input', { className: 'finp tot', readOnly: true, value: total + ' lei' })),
@@ -1974,13 +2026,18 @@ function Drawer(props) {
   var syncColor = props.syncColor, syncLabel = props.syncLabel;
   var cs = useState(false);
   var calOpen = cs[0], setCalOpen = cs[1];
-  // accordion: 'rooms' | 'sources' | 'sync' | null — un singur panou deschis
+  // accordion interior (Camere/Surse/Sincronizari), independent de categoria mare
   var acs = useState(null);
   var accordionOpen = acs[0], setAccordionOpen = acs[1];
+  // categoria mare deschisa: null | 'daily' | 'comm' | 'config' | 'account' — DOAR UNA la un moment dat,
+  // toate incep inchise (utilizatorul alege ce deschide)
+  var ocs = useState(null);
+  var openCategory = ocs[0], setOpenCategory = ocs[1];
   var obCount = conflicts.length;
 
   function navTo(t) { setTab(t); props.onClose(); }
   function toggleAccordion(key) { setAccordionOpen(accordionOpen === key ? null : key); }
+  function toggleCategory(key) { setOpenCategory(openCategory === key ? null : key); }
 
   // cate platforme de sincronizare au cel putin un link configurat
   var icalLinksV2 = lc.get('ical_links_v2', null);
@@ -1989,12 +2046,23 @@ function Drawer(props) {
     return Object.keys(icalLinksV2[p.id]).some(function(r) { return icalLinksV2[p.id][r]; });
   });
 
+  // Header pentru o categorie mare (nivelul 1 din cascada)
+  function catHeader(key, icon, label, badge) {
+    var isOpen = openCategory === key;
+    return h('div', { className: 'ditem' + (isOpen ? ' on' : ''), style: { fontWeight: 800 }, onClick: function() { toggleCategory(key); } },
+      h('span', { className: 'dico' }, icon),
+      h('div', { className: 'dtxt' }, h('div', { className: 'dnm' }, label)),
+      badge > 0 && h('span', { className: 'dbdg' }, badge),
+      h('span', { className: 'darr' }, isOpen ? '\u2303' : '\u2304')
+    );
+  }
+
   return h(Fragment, null,
     h('div', { className: 'dbg', onClick: props.onClose }),
     h('div', { className: 'drw' },
       h('div', { className: 'drw-hdr' },
         h('div', { className: 'drw-logo' }, '\uD83C\uDFE1'),
-        h('div', { className: 'drw-tit' }, 'Rezervari'),
+        h('div', { className: 'drw-tit' }, 'Rezervario'),
         h('div', { className: 'drw-syn' },
           h('span', { style: { width: 7, height: 7, borderRadius: '50%', background: syncColor, display: 'inline-block' } }),
           syncLabel
@@ -2002,212 +2070,165 @@ function Drawer(props) {
       ),
       h('div', { className: 'drw-body' },
 
-        // ── NAV PRINCIPAL ──
-        h('div', { className: 'dlbl' }, 'Navigare'),
-        h('div', { className: 'ditem' + (tab === 'rez' ? ' on' : ''), onClick: function() { navTo('rez'); } },
-          h('span', { className: 'dico' }, '\uD83D\uDCCB'),
-          h('div', { className: 'dtxt' },
-            h('div', { className: 'dnm' }, 'Rezervari'),
-            h('div', { className: 'dsub' }, 'Prezente si viitoare')
+        // ══════════ CATEGORIA 1: GESTIUNE ZILNICA ══════════
+        catHeader('daily', '\uD83D\uDCCB', 'Gestiune zilnica', obCount),
+        openCategory === 'daily' && h('div', { className: 'dexp' },
+          h('div', { className: 'dsub-item' + (tab.startsWith('cal') ? ' on' : ''), onClick: function() { setCalOpen(!calOpen); } },
+            h('span', { style: { fontSize: 15 } }, '\uD83D\uDCC5'),
+            h('span', { className: 'dsub-lbl' }, 'Calendar'),
+            h('span', { className: 'darr', style: { marginLeft: 'auto' } }, calOpen ? '\u2303' : '\u2304')
           ),
-          obCount > 0 && h('span', { className: 'dbdg' }, obCount + ' OB')
-        ),
-        h('div', { className: 'ditem' + (tab.startsWith('cal') ? ' on' : ''), onClick: function() { setCalOpen(!calOpen); } },
-          h('span', { className: 'dico' }, '\uD83D\uDCC5'),
-          h('div', { className: 'dtxt' },
-            h('div', { className: 'dnm' }, 'Calendar'),
-            h('div', { className: 'dsub' }, 'Lunar, saptamanal, interval')
-          ),
-          h('span', { className: 'darr' }, calOpen ? '\u2303' : '\u2304')
-        ),
-        calOpen && h('div', { className: 'dexp' },
-          [['cal-month', '\uD83D\uDCC5', 'Lunar'], ['cal-week', '\uD83D\uDDD3', 'Saptamanal'], ['cal-custom', '\uD83D\uDCC6', 'Interval personalizat']].map(function(vl) {
-            return h('div', { key: vl[0], className: 'dsub-item' + (tab === vl[0] ? ' on' : ''), onClick: function() { navTo(vl[0]); } },
-              h('span', { style: { fontSize: 15 } }, vl[1]),
+          calOpen && [['cal-month', '\uD83D\uDCC5', 'Lunar'], ['cal-week', '\uD83D\uDDD3', 'Saptamanal'], ['cal-custom', '\uD83D\uDCC6', 'Interval personalizat']].map(function(vl) {
+            return h('div', { key: vl[0], className: 'dsub-item', style: { paddingLeft: 30 }, onClick: function() { navTo(vl[0]); } },
+              h('span', { style: { fontSize: 14 } }, vl[1]),
               h('span', { className: 'dsub-lbl' }, vl[2])
             );
-          })
-        ),
-        h('div', { className: 'ditem' + (tab === 'stats' ? ' on' : ''), onClick: function() { navTo('stats'); } },
-          h('span', { className: 'dico' }, '\uD83D\uDCCA'),
-          h('div', { className: 'dtxt' },
-            h('div', { className: 'dnm' }, 'Statistici'),
-            h('div', { className: 'dsub' }, 'Venituri, nopti, surse')
+          }),
+          h('div', { className: 'dsub-item' + (tab === 'stats' ? ' on' : ''), onClick: function() { navTo('stats'); } },
+            h('span', { style: { fontSize: 15 } }, '\uD83D\uDCCA'),
+            h('span', { className: 'dsub-lbl' }, 'Statistici')
+          ),
+          h('div', { className: 'dsub-item' + (tab === 'archive' ? ' on' : ''), onClick: function() { navTo('archive'); } },
+            h('span', { style: { fontSize: 15 } }, '\uD83D\uDDC2'),
+            h('span', { className: 'dsub-lbl' }, 'Istoric rezervari')
+          ),
+          h('div', { className: 'dsub-item', onClick: function() { props.onOpenAvailability(); props.onClose(); } },
+            h('span', { style: { fontSize: 15 } }, '\uD83D\uDD0D'),
+            h('span', { className: 'dsub-lbl' }, 'Verifica disponibilitate')
           )
         ),
-        h('div', { className: 'ditem' + (tab === 'archive' ? ' on' : ''), onClick: function() { navTo('archive'); } },
-          h('span', { className: 'dico' }, '\uD83D\uDDC2'),
-          h('div', { className: 'dtxt' },
-            h('div', { className: 'dnm' }, 'Istoric rezervari'),
-            h('div', { className: 'dsub' }, 'Cautare rezervari incheiate')
+
+        // ══════════ CATEGORIA 2: COMUNICARE CU OASPETII ══════════
+        catHeader('comm', '\uD83D\uDCAC', 'Comunicare cu oaspetii'),
+        openCategory === 'comm' && h('div', { className: 'dexp' },
+          h('div', { className: 'dsub-item', onClick: function() { props.onOpenMessages(); props.onClose(); } },
+            h('span', { style: { fontSize: 15 } }, '\uD83D\uDCAC'),
+            h('span', { className: 'dsub-lbl' }, 'Mesaje WhatsApp')
           )
         ),
-        h('div', { className: 'ditem', onClick: function() { props.onOpenMessages(); props.onClose(); } },
-          h('span', { className: 'dico' }, '\uD83D\uDCAC'),
-          h('div', { className: 'dtxt' },
-            h('div', { className: 'dnm' }, 'Mesaje WhatsApp'),
-            h('div', { className: 'dsub' }, '10 template-uri gata de folosit')
-          ),
-          h('span', { className: 'darr' }, '\u203A')
-        ),
-        h('div', { className: 'ditem', onClick: function() { props.onOpenAvailability(); props.onClose(); } },
-          h('span', { className: 'dico' }, '\uD83D\uDD0D'),
-          h('div', { className: 'dtxt' },
-            h('div', { className: 'dnm' }, 'Verifica disponibilitate'),
-            h('div', { className: 'dsub' }, 'Cauta camere libere pe o data')
-          ),
-          h('span', { className: 'darr' }, '\u203A')
-        ),
-        h('div', { className: 'ditem', onClick: function() { props.onOpenBookingRules(); props.onClose(); } },
-          h('span', { className: 'dico' }, '\uD83D\uDECF\uFE0F'),
-          h('div', { className: 'dtxt' },
-            h('div', { className: 'dnm' }, 'Reguli de cazare'),
-            h('div', { className: 'dsub' }, 'Pauza intre rezervari, sejur minim, preaviz')
-          ),
-          h('span', { className: 'darr' }, '\u203A')
-        ),
 
-        h('div', { className: 'ddiv' }),
+        // ══════════ CATEGORIA 3: CONFIGURARE PENSIUNE ══════════
+        catHeader('config', '\u2699\uFE0F', 'Configurare pensiune'),
+        openCategory === 'config' && h('div', { className: 'dexp' },
 
-        // ── ACCORDION: CAMERE ──
-        h('div', { className: 'dlbl' }, 'Configurare'),
-        h('div', { className: 'ditem' + (accordionOpen === 'rooms' ? ' on' : ''), onClick: function() { toggleAccordion('rooms'); } },
-          h('span', { className: 'dico' }, '\uD83D\uDEAA'),
-          h('div', { className: 'dtxt' },
-            h('div', { className: 'dnm' }, 'Camere'),
-            h('div', { className: 'dsub' }, rooms.length + ' camere configurate')
+          // ── Camere ──
+          h('div', { className: 'dsub-item' + (accordionOpen === 'rooms' ? ' on' : ''), onClick: function() { toggleAccordion('rooms'); } },
+            h('span', { style: { fontSize: 15 } }, '\uD83D\uDEAA'),
+            h('span', { className: 'dsub-lbl' }, 'Camere (' + rooms.length + ')'),
+            h('span', { className: 'darr', style: { marginLeft: 'auto' } }, accordionOpen === 'rooms' ? '\u2303' : '\u2304')
           ),
-          h('span', { className: 'darr' }, accordionOpen === 'rooms' ? '\u2303' : '\u2304')
-        ),
-        accordionOpen === 'rooms' && h('div', { className: 'dexp' },
-          rooms.map(function(r) {
-            return h('div', { key: r, className: 'dsub-item', style: { justifyContent: 'space-between' } },
-              h('span', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
-                h('span', { style: { fontSize: 15 } }, '\uD83D\uDEAA'),
+          accordionOpen === 'rooms' && h('div', { style: { paddingLeft: 20 } },
+            rooms.map(function(r) {
+              return h('div', { key: r, className: 'dsub-item', style: { paddingLeft: 24 } },
+                h('span', { style: { fontSize: 14 } }, '\uD83D\uDEAA'),
                 h('span', { className: 'dsub-lbl' }, r)
-              )
-            );
-          }),
-          h('div', { className: 'dsub-item', style: { color: '#2563eb', fontWeight: 700 }, onClick: function() { props.onOpenRooms(); props.onClose(); } },
-            h('span', { style: { fontSize: 15 } }, '\u270F\uFE0F'),
-            h('span', { className: 'dsub-lbl' }, 'Adauga / editeaza / sterge camere')
+              );
+            }),
+            h('div', { className: 'dsub-item', style: { color: '#2563eb', fontWeight: 700, paddingLeft: 24 }, onClick: function() { props.onOpenRooms(); props.onClose(); } },
+              h('span', { style: { fontSize: 14 } }, '\u270F\uFE0F'),
+              h('span', { className: 'dsub-lbl' }, 'Adauga / editeaza / sterge')
+            )
+          ),
+
+          // ── Surse ──
+          h('div', { className: 'dsub-item' + (accordionOpen === 'sources' ? ' on' : ''), onClick: function() { toggleAccordion('sources'); } },
+            h('span', { style: { fontSize: 15 } }, '\uD83D\uDC64'),
+            h('span', { className: 'dsub-lbl' }, 'Surse (' + sources.length + ')'),
+            h('span', { className: 'darr', style: { marginLeft: 'auto' } }, accordionOpen === 'sources' ? '\u2303' : '\u2304')
+          ),
+          accordionOpen === 'sources' && h('div', { style: { paddingLeft: 20 } },
+            sources.map(function(s, i) {
+              var c = PAL[i % PAL.length];
+              return h('div', { key: s, className: 'dsub-item', style: { paddingLeft: 24 } },
+                h('span', { className: 'dchip', style: { background: c.light, color: c.text, fontSize: 12 } }, s)
+              );
+            }),
+            h('div', { className: 'dsub-item', style: { color: '#2563eb', fontWeight: 700, paddingLeft: 24 }, onClick: function() { props.onOpenSrc(); props.onClose(); } },
+              h('span', { style: { fontSize: 14 } }, '\u270F\uFE0F'),
+              h('span', { className: 'dsub-lbl' }, 'Adauga / editeaza / sterge')
+            )
+          ),
+
+          // ── Toata locatia (toggle simplu, fara sub-meniu) ──
+          h('div', { className: 'dsub-item', onClick: props.onToggleWholeEnabled },
+            h('span', { style: { fontSize: 15 } }, '\uD83C\uDFE0'),
+            h('span', { className: 'dsub-lbl' }, 'Toata locatia'),
+            h('span', {
+              style: {
+                marginLeft: 'auto', fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: 20,
+                background: props.wholeEnabled ? '#dcfce7' : '#f1f5f9',
+                color: props.wholeEnabled ? '#15803d' : '#94a3b8'
+              }
+            }, props.wholeEnabled ? 'ACTIV' : 'INACTIV')
+          ),
+          h('div', { style: { fontSize: 11.5, color: '#94a3b8', padding: '0 18px 8px 44px' } }, 'Permite rezervarea intregii proprietati ca unitate unica'),
+
+          // ── Reguli de cazare ──
+          h('div', { className: 'dsub-item', onClick: function() { props.onOpenBookingRules(); props.onClose(); } },
+            h('span', { style: { fontSize: 15 } }, '\uD83D\uDECF\uFE0F'),
+            h('span', { className: 'dsub-lbl' }, 'Reguli de cazare')
+          ),
+
+          // ── Preturi / link rezervare ──
+          h('div', { className: 'dsub-item', style: { justifyContent: 'space-between' }, onClick: function() { props.onOpenPrices(); props.onClose(); } },
+            h('span', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+              h('span', { style: { fontSize: 15 } }, '\uD83D\uDD17'),
+              h('span', { className: 'dsub-lbl' }, 'Preturi / Link rezervare')
+            ),
+            props.pendingCount > 0 && h('span', { className: 'dbdg' }, props.pendingCount)
+          ),
+
+          // ── Sincronizari ──
+          h('div', { className: 'dsub-item' + (accordionOpen === 'sync' ? ' on' : ''), onClick: function() { toggleAccordion('sync'); } },
+            h('span', { style: { fontSize: 15 } }, '\uD83D\uDD04'),
+            h('span', { className: 'dsub-lbl' }, 'Sincronizari (' + connectedPlatforms.length + ')'),
+            h('span', { className: 'darr', style: { marginLeft: 'auto' } }, accordionOpen === 'sync' ? '\u2303' : '\u2304')
+          ),
+          accordionOpen === 'sync' && h('div', { style: { paddingLeft: 20 } },
+            SYNC_PLATFORMS.map(function(p) {
+              var connected = connectedPlatforms.some(function(cp) { return cp.id === p.id; });
+              return h('div', { key: p.id, className: 'dsub-item', style: { justifyContent: 'space-between', paddingLeft: 24 }, onClick: function() { props.onOpenIcal(); props.onClose(); } },
+                h('span', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+                  h('span', { style: { fontSize: 14 } }, p.icon),
+                  h('span', { className: 'dsub-lbl' }, p.name)
+                ),
+                h('span', { style: { fontSize: 10, fontWeight: 700, color: connected ? '#16a34a' : '#94a3b8' } }, connected ? 'Conectat' : 'Neconectat')
+              );
+            }),
+            h('div', { className: 'dsub-item', style: { color: '#2563eb', fontWeight: 700, paddingLeft: 24 }, onClick: function() { props.onOpenIcal(); props.onClose(); } },
+              h('span', { style: { fontSize: 14 } }, '\u2699\uFE0F'),
+              h('span', { className: 'dsub-lbl' }, 'Gestioneaza sincronizarile')
+            )
           )
         ),
 
-        // ── ACCORDION: SURSE ──
-        h('div', { className: 'ditem' + (accordionOpen === 'sources' ? ' on' : ''), onClick: function() { toggleAccordion('sources'); } },
-          h('span', { className: 'dico' }, '\uD83D\uDC64'),
-          h('div', { className: 'dtxt' },
-            h('div', { className: 'dnm' }, 'Surse'),
-            h('div', { className: 'dsub' }, sources.length + ' surse active')
+        // ══════════ CATEGORIA 4: CONT SI FACTURARE ══════════
+        catHeader('account', '\uD83D\uDC64', 'Cont si facturare'),
+        openCategory === 'account' && h('div', { className: 'dexp' },
+          h('div', { className: 'dsub-item', onClick: function() { props.onOpenPensionSettings(); props.onClose(); } },
+            h('span', { style: { fontSize: 15 } }, '\uD83C\uDFE1'),
+            h('span', { className: 'dsub-lbl' }, props.pensionName || 'Numeste pensiunea')
           ),
-          h('span', { className: 'darr' }, accordionOpen === 'sources' ? '\u2303' : '\u2304')
-        ),
-        accordionOpen === 'sources' && h('div', { className: 'dexp' },
-          sources.map(function(s, i) {
-            var c = PAL[i % PAL.length];
-            return h('div', { key: s, className: 'dsub-item' },
-              h('span', { className: 'dchip', style: { background: c.light, color: c.text, fontSize: 12 } }, s)
-            );
-          }),
-          h('div', { className: 'dsub-item', style: { color: '#2563eb', fontWeight: 700 }, onClick: function() { props.onOpenSrc(); props.onClose(); } },
-            h('span', { style: { fontSize: 15 } }, '\u270F\uFE0F'),
-            h('span', { className: 'dsub-lbl' }, 'Adauga / editeaza / sterge surse')
-          )
-        ),
-
-        // ── ACCORDION: SINCRONIZARI ──
-        h('div', { className: 'ditem' + (accordionOpen === 'sync' ? ' on' : ''), onClick: function() { toggleAccordion('sync'); } },
-          h('span', { className: 'dico' }, '\uD83D\uDD04'),
-          h('div', { className: 'dtxt' },
-            h('div', { className: 'dnm' }, 'Sincronizari'),
-            h('div', { className: 'dsub' }, connectedPlatforms.length > 0 ? (connectedPlatforms.length + ' platforme conectate') : 'Niciuna conectata')
+          h('div', { className: 'dsub-item', onClick: function() { props.onOpenAccountSettings(); props.onClose(); } },
+            h('span', { style: { fontSize: 15 } }, '\uD83D\uDC64'),
+            h('span', { className: 'dsub-lbl' }, props.userEmail || 'Cont')
           ),
-          h('span', { className: 'darr' }, accordionOpen === 'sync' ? '\u2303' : '\u2304')
-        ),
-        accordionOpen === 'sync' && h('div', { className: 'dexp' },
-          SYNC_PLATFORMS.map(function(p) {
-            var connected = connectedPlatforms.some(function(cp) { return cp.id === p.id; });
-            return h('div', { key: p.id, className: 'dsub-item', style: { justifyContent: 'space-between' }, onClick: function() { props.onOpenIcal(); props.onClose(); } },
-              h('span', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
-                h('span', { style: { fontSize: 15 } }, p.icon),
-                h('span', { className: 'dsub-lbl' }, p.name)
-              ),
-              h('span', { style: { display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: connected ? '#16a34a' : '#94a3b8' } },
-                h('span', { style: { width: 6, height: 6, borderRadius: '50%', background: connected ? '#16a34a' : '#cbd5e1' } }),
-                connected ? 'Conectat' : 'Neconectat'
-              )
-            );
-          }),
-          h('div', { className: 'dsub-item', style: { color: '#2563eb', fontWeight: 700 }, onClick: function() { props.onOpenIcal(); props.onClose(); } },
-            h('span', { style: { fontSize: 15 } }, '\u2699\uFE0F'),
-            h('span', { className: 'dsub-lbl' }, 'Gestioneaza sincronizarile')
-          )
-        ),
-
-        h('div', { className: 'ddiv' }),
-
-        // ── SETARI PENSIUNE (nume + fotografie) ──
-        h('div', { className: 'dlbl' }, 'Setari Pensiune'),
-        h('div', { className: 'ditem', onClick: function() { props.onOpenPensionSettings(); props.onClose(); } },
-          props.pensionPhoto
-            ? h('img', { src: props.pensionPhoto, className: 'dico', style: { width: 30, height: 30, borderRadius: 8, objectFit: 'cover', flexShrink: 0 } })
-            : h('span', { className: 'dico' }, '\uD83C\uDFE1'),
-          h('div', { className: 'dtxt' },
-            h('div', { className: 'dnm' }, props.pensionName || 'Numeste pensiunea'),
-            h('div', { className: 'dsub' }, 'Nume si fotografie generala')
-          ),
-          h('span', { className: 'darr' }, '›')
-        ),
-
-        h('div', { className: 'ddiv' }),
-
-        // ── CONTUL MEU (email + schimbare parola) ──
-        h('div', { className: 'dlbl' }, 'Contul meu'),
-        h('div', { className: 'ditem', onClick: function() { props.onOpenAccountSettings(); props.onClose(); } },
-          h('span', { className: 'dico' }, '\uD83D\uDC64'),
-          h('div', { className: 'dtxt' },
-            h('div', { className: 'dnm' }, props.userEmail || 'Cont'),
-            h('div', { className: 'dsub' }, 'Schimba parola, deconectare')
-          ),
-          h('span', { className: 'darr' }, '›')
-        ),
-        h('div', { className: 'ditem', onClick: function() { props.onOpenBillingInfo(); props.onClose(); } },
-          h('span', { className: 'dico' }, '\uD83E\uDDFE'),
-          h('div', { className: 'dtxt' },
-            h('div', { className: 'dnm' }, props.billingInfo
+          h('div', { className: 'dsub-item', onClick: function() { props.onOpenBillingInfo(); props.onClose(); } },
+            h('span', { style: { fontSize: 15 } }, '\uD83E\uDDFE'),
+            h('span', { className: 'dsub-lbl' }, props.billingInfo
               ? (props.billingInfo.type === 'pj' ? (props.billingInfo.companyName || 'Date facturare') : (props.billingInfo.fullName || 'Date facturare'))
-              : 'Date Facturare'),
-            h('div', { className: 'dsub' }, props.billingInfo ? 'Date complete' : 'Persoana fizica sau firma')
+              : 'Date facturare')
           ),
-          h('span', { className: 'darr' }, '›')
-        ),
-
-        h('div', { className: 'ddiv' }),
-
-        // ── ALTE OPTIUNI ──
-        h('div', { className: 'dlbl' }, 'Altele'),
-        h('div', { className: 'ditem', onClick: function() { props.onOpenPdf(); props.onClose(); } },
-          h('span', { className: 'dico' }, '\uD83D\uDDA8'),
-          h('div', { className: 'dtxt' },
-            h('div', { className: 'dnm' }, 'Descarca / Tipareste'),
-            h('div', { className: 'dsub' }, 'Export rezervari PDF')
-          ),
-          h('span', { className: 'darr' }, '›')
-        ),
-        h('div', { className: 'ditem', onClick: function() { props.onOpenPrices(); props.onClose(); } },
-          h('span', { className: 'dico' }, '\uD83D\uDD17'),
-          h('div', { className: 'dtxt' },
-            h('div', { className: 'dnm' }, 'Link rezervare clienti'),
-            h('div', { className: 'dsub' }, 'Preturi camere + link public')
-          ),
-          props.pendingCount > 0 && h('span', { className: 'dbdg' }, props.pendingCount + ' nou'),
-          props.pendingCount === 0 && h('span', { className: 'darr' }, '›')
+          h('div', { className: 'dsub-item', onClick: function() { props.onOpenPdf(); props.onClose(); } },
+            h('span', { style: { fontSize: 15 } }, '\uD83D\uDDA8'),
+            h('span', { className: 'dsub-lbl' }, 'Descarca / Tipareste PDF')
+          )
         )
       )
     )
   );
 }
+
 
 
 // ── ICAL CONSTANTS ───────────────────────────────────────────────────────────
