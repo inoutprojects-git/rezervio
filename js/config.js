@@ -20,7 +20,7 @@ var USER_ROLE = null;   // 'network_admin' | 'owner' | 'staff' — populat la lo
 var PLAN_LIMITS = { basic: 1, standard: 3, premium: 10 };
 // Numarul de WhatsApp al administratorului retea, folosit pentru "Contact suport" din meniu
 // si pe ecranul de trial expirat. MODIFICA aici cu numarul real inainte de lansare.
-var SUPPORT_PHONE = '+40700000000';
+var SUPPORT_PHONE = '+40750454524';
 var PLAN_LABELS = { basic: 'Basic', standard: 'Standard', premium: 'Premium' };
 
 // ── CONSTANTS ──────────────────────────────────────────────────────────────────
