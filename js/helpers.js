@@ -80,6 +80,49 @@ function getCol(srcs, name) { var i = srcs.indexOf(name); return PAL[i >= 0 ? i 
 function fullName(r) { return [r.firstName, r.lastName].filter(Boolean).join(' ') || '(fara nume)'; }
 function isActiveFuture(r) { return r.checkIn && addDays(r.checkIn, r.nights || 0) >= todayStr(); }
 
+// ── CATEGORIZARE REZERVARI (partajata intre TodayBar si ResTab) ────────────────
+// Grupeaza rezervarile active in 4 categorii fata de "today". O rezervare cu
+// check-in azi si checkedIn=true e tratata ca "staying" (turist deja sosit).
+function categorizeReservations(reservations, today) {
+  var checkinToday = [], checkoutToday = [], staying = [], future = [];
+  reservations.forEach(function(r) {
+    if (!r.checkIn) return;
+    var checkOut = addDays(r.checkIn, r.nights || 0);
+    if (checkOut < today) return;
+    if (r.checkIn === today) {
+      if (r.checkedIn) { staying.push(r); } else { checkinToday.push(r); }
+    } else if (checkOut === today) {
+      checkoutToday.push(r);
+    } else if (r.checkIn < today && checkOut > today) {
+      staying.push(r);
+    } else if (r.checkIn > today) {
+      future.push(r);
+    }
+  });
+  var byCheckIn = function(a, b) { return (a.checkIn || '') < (b.checkIn || '') ? -1 : (a.checkIn || '') > (b.checkIn || '') ? 1 : ((a.room || '') < (b.room || '') ? -1 : 1); };
+  checkinToday.sort(byCheckIn);
+  checkoutToday.sort(byCheckIn);
+  staying.sort(byCheckIn);
+  future.sort(byCheckIn);
+  return { checkinToday: checkinToday, checkoutToday: checkoutToday, staying: staying, future: future };
+}
+
+// ── CAMERE LIBERE ACUM (partajata intre TodayBar si ResTab) ────────────────────
+// O camera e "libera" daca nicio rezervare (indiferent de status ocupat/blocat)
+// nu o acopera azi. Rezervarile "Toata locatia" (WHOLE) blocheaza toate camerele.
+function getFreeRooms(rooms, reservations, today) {
+  var occupied = new Set();
+  reservations.forEach(function(r) {
+    if (!r.checkIn) return;
+    var checkOut = addDays(r.checkIn, r.nights || 0);
+    if (r.checkIn <= today && checkOut > today) {
+      if (r.room === WHOLE) { rooms.forEach(function(rm) { occupied.add(rm); }); }
+      else { occupied.add(r.room); }
+    }
+  });
+  return rooms.filter(function(r) { return !occupied.has(r); });
+}
+
 
 // ── URL HELPERS (extras exact din versiunea originala) ─────────────────────────
 function phoneUrl(phone, simPhone) {

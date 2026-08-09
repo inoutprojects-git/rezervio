@@ -31,6 +31,10 @@ function App() {
   var mrs = useState(null); var msgRes = mrs[0], setMsgRes = mrs[1];
   var bis = useState(null); var billingInfo = bis[0], setBillingInfo = bis[1];
   var sbi = useState(false); var showBillingInfo = sbi[0], setShowBillingInfo = sbi[1];
+  var afs = useState('future'); var activeFilter = afs[0], setActiveFilter = afs[1];
+  var brs = useState(function() { return lc.get('p_bookrules', { minGapDays: 0, minNights: 0, minAdvanceDays: 0 }); }); var bookingRules = brs[0], setBookingRules = brs[1];
+  var sbr = useState(false); var showBookingRules = sbr[0], setShowBookingRules = sbr[1];
+  var sav = useState(false); var showAvailability = sav[0], setShowAvailability = sav[1];
 
   // Titlul paginii reflecta numele pensiunii (setat din Firebase)
   useEffect(function() {
@@ -50,6 +54,7 @@ function App() {
         if (cfg.roomPrices) { setRoomPrices(cfg.roomPrices); lc.set('p_prices', cfg.roomPrices); }
         if (cfg.pensionName !== undefined) { setPensionName(cfg.pensionName); lc.set('p_name', cfg.pensionName); }
         if (cfg.pensionPhoto !== undefined) { setPensionPhoto(cfg.pensionPhoto); lc.set('p_photo', cfg.pensionPhoto); }
+        if (cfg.bookingRules) { setBookingRules(cfg.bookingRules); lc.set('p_bookrules', cfg.bookingRules); }
       }
     });
     var u2 = fb.on('reservations', function(data) {
@@ -78,7 +83,7 @@ function App() {
   // campuri precum pensionName/pensionPhoto cand se salveaza doar camere/surse, sau invers.
   function saveConfig(partial) {
     setSync('syncing');
-    var merged = Object.assign({}, { rooms: rooms, sources: sources, roomPrices: roomPrices, pensionName: pensionName, pensionPhoto: pensionPhoto }, partial);
+    var merged = Object.assign({}, { rooms: rooms, sources: sources, roomPrices: roomPrices, pensionName: pensionName, pensionPhoto: pensionPhoto, bookingRules: bookingRules }, partial);
     return fb.set('config', merged).then(function() { setSync('online'); }).catch(function(err) {
       console.error('saveConfig error:', err);
       setSync('error');
@@ -197,6 +202,14 @@ function App() {
     });
   }
 
+  // Reguli de cazare (pauza minima intre rezervari, sejur minim, preaviz minim)
+  function saveBookingRules(rules) {
+    return saveConfig({ bookingRules: rules }).then(function() {
+      setBookingRules(rules); lc.set('p_bookrules', rules);
+      setShowBookingRules(false);
+    });
+  }
+
   // Datele de facturare se scriu sub users/{uid}, NU sub pensions/{PENSION_ID} — sunt legate
   // de persoana/firma care detine contul, nu de pensiune (relevant mai ales daca un cont va
   // putea gestiona multiple pensiuni in viitor).
@@ -211,7 +224,7 @@ function App() {
       });
   }
 
-  function openNew(room) { setModal({ mode: 'new', data: Object.assign({}, EMPTY_RES, { room: room || '', source: sources[0] || '' }) }); }
+  function openNew(room, prefill) { setModal({ mode: 'new', data: Object.assign({}, EMPTY_RES, { room: room || '', source: sources[0] || '' }, prefill || {}) }); }
   function openEdit(r) { setModal({ mode: 'edit', data: Object.assign({}, r) }); }
   function openCopy(r) { setModal({ mode: 'copy', data: Object.assign({}, r, { id: null }) }); }
   function openMove(r) { setModal({ mode: 'move', data: Object.assign({}, r) }); }
@@ -270,6 +283,8 @@ function App() {
       onOpenAccountSettings: function() { setShowAccountSettings(true); },
       onOpenBillingInfo: function() { setShowBillingInfo(true); },
       onOpenMessages: function() { setMsgRes(null); setShowMessages(true); },
+      onOpenBookingRules: function() { setShowBookingRules(true); },
+      onOpenAvailability: function() { setShowAvailability(true); },
       onClose: function() { setDrawerOpen(false); }
     }),
     // PENDING BANNER
@@ -293,14 +308,14 @@ function App() {
         })
       )
     ),
-    h(TodayBar, { reservations: reservations, rooms: rooms, sources: sources }),
+    h(TodayBar, { reservations: reservations, rooms: rooms, sources: sources, activeFilter: activeFilter, onFilterChange: function(f) { setActiveFilter(f); if (tab !== 'rez') setTab('rez'); } }),
     // CONTENT
-    tab === 'rez' && h(ResTab, { rooms: rooms, sources: sources, reservations: reservations, conflicts: conflicts, onNew: openNew, onEdit: openEdit, onCopy: openCopy, onMove: openMove, onDelete: delRes, onSendMsg: function(r) { setMsgRes(r); setShowMessages(true); }, onToggleCheckedIn: toggleCheckedIn, onToggleRoomCleaned: toggleRoomCleaned, onSaveGuestDetails: saveGuestDetails, pensionName: pensionName }),
+    tab === 'rez' && h(ResTab, { rooms: rooms, sources: sources, reservations: reservations, conflicts: conflicts, onNew: openNew, onEdit: openEdit, onCopy: openCopy, onMove: openMove, onDelete: delRes, onSendMsg: function(r) { setMsgRes(r); setShowMessages(true); }, onToggleCheckedIn: toggleCheckedIn, onToggleRoomCleaned: toggleRoomCleaned, onSaveGuestDetails: saveGuestDetails, pensionName: pensionName, activeFilter: activeFilter, bookingRules: bookingRules }),
     tab.startsWith('cal') && h(CalTab, { rooms: rooms, sources: sources, reservations: reservations, initView: calViewMap[tab] || 'month', onNew: openNew, onEdit: openEdit }),
     tab === 'stats' && h(StatsTab, { rooms: rooms, sources: sources, reservations: reservations }),
     tab === 'archive' && h(ArchiveTab, { rooms: rooms, sources: sources, reservations: reservations, onEdit: openEdit, onCopy: openCopy, onMove: openMove, onDelete: delRes, onSendMsg: function(r) { setMsgRes(r); setShowMessages(true); }, onSaveGuestDetails: saveGuestDetails, pensionName: pensionName }),
     // MODALS
-    modal && h(ResMdl, { modal: modal, onSave: saveRes, onClose: function() { setModal(null); }, rooms: rooms, sources: sources, reservations: reservations }),
+    modal && h(ResMdl, { modal: modal, onSave: saveRes, onClose: function() { setModal(null); }, rooms: rooms, sources: sources, reservations: reservations, bookingRules: bookingRules }),
     showRooms && h(RoomMgr, { rooms: rooms, reservations: reservations, onSave: saveRooms, onClose: function() { setShowRooms(false); } }),
     showSrc && h(SrcMgr, { sources: sources, onSave: saveSrc, onClose: function() { setShowSrc(false); } }),
     showPensionSettings && h(PensionSettings, { pensionName: pensionName, pensionPhoto: pensionPhoto, onSave: savePensionSettings, onClose: function() { setShowPensionSettings(false); } }),
@@ -344,6 +359,16 @@ function App() {
         });
       },
       onClose: function() { setShowPrices(false); }
+    }),
+    showBookingRules && h(BookingRulesSettings, {
+      rules: bookingRules,
+      onSave: saveBookingRules,
+      onClose: function() { setShowBookingRules(false); }
+    }),
+    showAvailability && h(AvailabilitySearch, {
+      rooms: rooms, reservations: reservations, bookingRules: bookingRules,
+      onNew: function(room, prefill) { setShowAvailability(false); openNew(room, prefill); },
+      onClose: function() { setShowAvailability(false); }
     }),
     confirm && h(Confirm, { msg: confirm.msg, okLbl: confirm.okLbl, ok: confirm.ok, onCancel: function() { setConfirm(null); } })
   );
@@ -490,6 +515,134 @@ function RoomMgr(props) {
   );
 }
 
+// ── CAUTA DISPONIBILITATE PE O DATA ──────────────────────────────────────────
+function AvailabilitySearch(props) {
+  var rooms = props.rooms, reservations = props.reservations, bookingRules = props.bookingRules || {};
+  var cs = useState(todayStr()); var checkIn = cs[0], setCheckIn = cs[1];
+  var ns = useState(1); var nights = ns[0], setNights = ns[1];
+
+  var checkOut = addDays(checkIn, nights);
+
+  // Pentru fiecare camera: 'free' | 'occupied' | 'gap' (tehnic libera dar incalca pauza minima)
+  var results = useMemo(function() {
+    if (!checkIn || !nights) return [];
+    return rooms.map(function(room) {
+      var conflict = reservations.find(function(r) {
+        return blocksRoom(r, room) && overlaps(checkIn, nights, r.checkIn, r.nights || 0);
+      });
+      if (conflict) return { room: room, status: 'occupied', detail: fullName(conflict) + ' (' + fmt(conflict.checkIn) + '\u2192' + fmt(addDays(conflict.checkIn, conflict.nights || 0)) + ')' };
+
+      if (bookingRules.minGapDays > 0) {
+        var gapConflict = reservations.find(function(r) {
+          if (!blocksRoom(r, room)) return false;
+          var rCheckOut = addDays(r.checkIn, r.nights || 0);
+          var gapBefore = r.checkIn < checkIn && rCheckOut <= checkIn && addDays(rCheckOut, bookingRules.minGapDays) > checkIn;
+          var gapAfter = r.checkIn >= checkOut && addDays(checkOut, bookingRules.minGapDays) > r.checkIn;
+          return gapBefore || gapAfter;
+        });
+        if (gapConflict) return { room: room, status: 'gap', detail: 'Necesita pauza fata de ' + fullName(gapConflict) };
+      }
+
+      return { room: room, status: 'free', detail: null };
+    });
+  }, [rooms, reservations, checkIn, nights, bookingRules]);
+
+  var statusMeta = {
+    free: { label: 'Libera', color: '#16a34a', bg: '#dcfce7', icon: '\uD83D\uDFE2' },
+    gap: { label: 'Libera, dar necesita pauza', color: '#d97706', bg: '#fef3c7', icon: '\uD83D\uDFE1' },
+    occupied: { label: 'Ocupata', color: '#dc2626', bg: '#fee2e2', icon: '\uD83D\uDD34' }
+  };
+
+  return h('div', { className: 'ov', onClick: props.onClose },
+    h('div', { className: 'mdl', onClick: function(e) { e.stopPropagation(); } },
+      h('div', { className: 'mhdr' },
+        h('span', { className: 'mtit' }, '\uD83D\uDD0D Verifica disponibilitate'),
+        h('button', { className: 'mclose', onClick: props.onClose }, '\u2715')
+      ),
+      h('div', { className: 'mbody' },
+        h('div', { className: 'fgrid' },
+          h(Field, { lbl: 'Data check-in', req: true }, h('input', { className: 'finp', type: 'date', value: checkIn, onChange: function(e) { setCheckIn(e.target.value); } })),
+          h(Field, { lbl: 'Nopti' }, h('input', { className: 'finp', type: 'number', min: 1, value: nights, onFocus: function(e) { e.target.select(); }, onChange: function(e) { setNights(parseInt(e.target.value) || 1); } })),
+          h(Field, { lbl: 'Check-out' }, h('input', { className: 'finp ro', readOnly: true, value: fmt(checkOut) }))
+        ),
+        h('div', { style: { marginTop: 16 } },
+          results.map(function(r) {
+            var meta = statusMeta[r.status];
+            return h('div', { key: r.room, style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: meta.bg, borderRadius: 10, marginBottom: 8, gap: 10 } },
+              h('div', { style: { flex: 1, minWidth: 0 } },
+                h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+                  h('span', null, meta.icon),
+                  h('span', { style: { fontWeight: 700, fontSize: 15, color: '#1a202c' } }, r.room),
+                  h('span', { style: { fontSize: 12, fontWeight: 700, color: meta.color } }, meta.label)
+                ),
+                r.detail && h('div', { style: { fontSize: 12, color: '#64748b', marginTop: 2 } }, r.detail)
+              ),
+              r.status !== 'occupied' && h('button', {
+                style: { padding: '8px 14px', background: r.status === 'gap' ? '#d97706' : '#16a34a', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer', flexShrink: 0 },
+                onClick: function() { props.onNew(r.room, { checkIn: checkIn, nights: nights }); }
+              }, '+ Rezerva')
+            );
+          })
+        )
+      ),
+      h('div', { className: 'mfoot' },
+        h('button', { className: 'mcanc', onClick: props.onClose }, 'Inchide')
+      )
+    )
+  );
+}
+
+// ── REGULI DE CAZARE ─────────────────────────────────────────────────────────
+function BookingRulesSettings(props) {
+  var r = props.rules || { minGapDays: 0, minNights: 0, minAdvanceDays: 0 };
+  var fs = useState({ minGapDays: r.minGapDays || 0, minNights: r.minNights || 0, minAdvanceDays: r.minAdvanceDays || 0 });
+  var form = fs[0], setForm = fs[1];
+  var sv = useState(false); var saving = sv[0], setSaving = sv[1];
+
+  function set(k, v) { setForm(Object.assign({}, form, { [k]: Math.max(0, parseInt(v) || 0) })); }
+
+  function handleSave() {
+    setSaving(true);
+    Promise.resolve(props.onSave(form)).catch(function(err) {
+      setSaving(false);
+      alert('Eroare la salvare: ' + err.message);
+    });
+  }
+
+  return h('div', { className: 'ov', onClick: props.onClose },
+    h('div', { className: 'mdl', onClick: function(e) { e.stopPropagation(); } },
+      h('div', { className: 'mhdr' },
+        h('span', { className: 'mtit' }, '\uD83D\uDECF\uFE0F Reguli de cazare'),
+        h('button', { className: 'mclose', onClick: props.onClose }, '\u2715')
+      ),
+      h('div', { className: 'mbody' },
+        h('div', { style: { fontSize: 12.5, color: '#64748b', marginBottom: 16, padding: '10px 12px', background: '#eff6ff', borderRadius: 8 } },
+          '\u2139\uFE0F Regulile de mai jos afiseaza avertismente la crearea unei rezervari, dar nu blocheaza salvarea — poti oricand confirma explicit ca vrei sa continui ("Salveaza (risc)").'
+        ),
+
+        h(Field, { lbl: 'Pauza minima intre rezervari (zile)' },
+          h('input', { className: 'finp', type: 'number', min: 0, value: form.minGapDays, onFocus: function(e) { e.target.select(); }, onChange: function(e) { set('minGapDays', e.target.value); } })
+        ),
+        h('div', { style: { fontSize: 12, color: '#94a3b8', margin: '-10px 0 16px' } }, '0 = dezactivat. Ex: 1 = camera trebuie sa ramana libera minim o zi intre doua rezervari (pentru curatenie).'),
+
+        h(Field, { lbl: 'Sejur minim (nopti)' },
+          h('input', { className: 'finp', type: 'number', min: 0, value: form.minNights, onFocus: function(e) { e.target.select(); }, onChange: function(e) { set('minNights', e.target.value); } })
+        ),
+        h('div', { style: { fontSize: 12, color: '#94a3b8', margin: '-10px 0 16px' } }, '0 = dezactivat. Ex: 2 = nu accepti rezervari de o singura noapte.'),
+
+        h(Field, { lbl: 'Preaviz minim (zile)' },
+          h('input', { className: 'finp', type: 'number', min: 0, value: form.minAdvanceDays, onFocus: function(e) { e.target.select(); }, onChange: function(e) { set('minAdvanceDays', e.target.value); } })
+        ),
+        h('div', { style: { fontSize: 12, color: '#94a3b8', margin: '-10px 0 4px' } }, '0 = dezactivat (accepti rezervari chiar in ziua sosirii). Ex: 1 = rezervarea trebuie facuta cu minim 1 zi inainte de check-in.')
+      ),
+      h('div', { className: 'mfoot' },
+        h('button', { className: 'mcanc', onClick: props.onClose }, 'Anuleaza'),
+        h('button', { className: 'msave', disabled: saving, onClick: handleSave }, saving ? 'Se salveaza...' : '\u2713 Salveaza')
+      )
+    )
+  );
+}
+
 // ── RESERVATION MODAL ────────────────────────────────────────────────────────
 function ResMdl(props) {
   var modal = props.modal, onSave = props.onSave, onClose = props.onClose;
@@ -506,11 +659,52 @@ function ResMdl(props) {
 
   function set(k, v) { setForm(Object.assign({}, form, { [k]: v })); }
 
-  var warn = useMemo(function() {
-    if (!form.room || !form.checkIn || !form.nights) return null;
+  var bookingRules = props.bookingRules || { minGapDays: 0, minNights: 0, minAdvanceDays: 0 };
+
+  // Toate avertismentele "soft" — nu blocheaza salvarea, doar cer confirmare explicita
+  // ("Salveaza (risc)"), consistent cu comportamentul de overbooking deja existent.
+  var warnings = useMemo(function() {
+    var list = [];
+    if (!form.room || !form.checkIn || !form.nights) return list;
+
+    // 1. Overlap direct pe aceeasi camera
     var cl = reservations.find(function(r) { return r.room === form.room && r.id !== form.id && overlaps(form.checkIn, form.nights, r.checkIn, r.nights); });
-    return cl ? fullName(cl) : null;
-  }, [form.room, form.checkIn, form.nights, form.id, reservations]);
+    if (cl) list.push('Camera deja rezervata de ' + fullName(cl) + '!');
+
+    // 2. Sejur minim
+    if (bookingRules.minNights > 0 && form.nights < bookingRules.minNights) {
+      list.push('Sejur sub minimul stabilit (' + bookingRules.minNights + ' nopti).');
+    }
+
+    // 3. Preaviz minim
+    if (bookingRules.minAdvanceDays > 0 && form.checkIn) {
+      var minAllowedDate = addDays(todayStr(), bookingRules.minAdvanceDays);
+      if (form.checkIn < minAllowedDate) {
+        list.push('Rezervare facuta cu mai putin preaviz decat minimul (' + bookingRules.minAdvanceDays + ' zile).');
+      }
+    }
+
+    // 4. Pauza minima intre rezervari pe aceeasi camera (nu conflict direct, ci prea aproape)
+    if (bookingRules.minGapDays > 0) {
+      var thisCheckOut = addDays(form.checkIn, form.nights);
+      var gapViolation = reservations.find(function(r) {
+        if (r.room !== form.room || r.id === form.id) return false;
+        var rCheckOut = addDays(r.checkIn, r.nights || 0);
+        // Alta rezervare se termina chiar inainte de a noastra, dar prea aproape
+        var gapBefore = r.checkIn < form.checkIn && rCheckOut <= form.checkIn && addDays(rCheckOut, bookingRules.minGapDays) > form.checkIn;
+        // Alta rezervare incepe chiar dupa a noastra, dar prea aproape
+        var gapAfter = r.checkIn >= thisCheckOut && addDays(thisCheckOut, bookingRules.minGapDays) > r.checkIn;
+        return gapBefore || gapAfter;
+      });
+      if (gapViolation) {
+        list.push('Pauza sub minimul stabilit fata de o alta rezervare pe aceeasi camera (' + bookingRules.minGapDays + ' zile necesare).');
+      }
+    }
+
+    return list;
+  }, [form.room, form.checkIn, form.nights, form.id, reservations, bookingRules]);
+
+  var warn = warnings.length > 0;
 
   function submit() {
     if (!form.room) { alert('Selecteaza camera!'); return; }
@@ -529,7 +723,9 @@ function ResMdl(props) {
         h('button', { className: 'mclose', onClick: onClose }, '\u2715')
       ),
       h('div', { className: 'mbody' },
-        warn && h('div', { className: 'obwarn' }, '\u26A0\uFE0F Camera deja rezervata de ', h('strong', null, warn), '!'),
+        warnings.length > 0 && h('div', { className: 'obwarn' },
+          warnings.map(function(w, i) { return h('div', { key: i, style: { marginBottom: i < warnings.length - 1 ? 4 : 0 } }, '\u26A0\uFE0F ' + w); })
+        ),
         h('div', { className: 'fgrid' },
           h(Field, { lbl: 'Camera', req: true },
             h('select', { className: 'finp', value: form.room, onChange: function(e) { set('room', e.target.value); } },
@@ -566,7 +762,7 @@ function ResMdl(props) {
       ),
       h('div', { className: 'mfoot' },
         h('button', { className: 'mcanc', onClick: onClose }, 'Anuleaza'),
-        h('button', { className: 'msave' + (warn ? ' warn' : ''), onClick: submit }, warn ? 'Salveaza (risc OB)' : (btnL[modal.mode] || btnL.new))
+        h('button', { className: 'msave' + (warn ? ' warn' : ''), onClick: submit }, warn ? 'Salveaza (risc)' : (btnL[modal.mode] || btnL.new))
       )
     )
   );
@@ -949,47 +1145,17 @@ function ResTab(props) {
   var ds = useState(null); var detailRes = ds[0], setDetailRes = ds[1];
   // 'general' = toate camerele amestecate; 'room' = grupat pe camera (camera ca sub-sectiune)
   var vms = useState('general'); var viewMode = vms[0], setViewMode = vms[1];
-
-  var confIds = useMemo(function() {
-    var ids = new Set();
-    conflicts.forEach(function(c) { ids.add(c.room); });
-    return ids;
-  }, [conflicts]);
+  var filter = props.activeFilter || 'future';
 
   var today = todayStr();
 
-  // ── CELE 4 CATEGORII ─────────────────────────────────────────────────────
-  // O rezervare poate fi simultan "intrare azi" SI "iesire azi" (sejur de 0 nopti /
-  // aceeasi zi) — categoriile nu sunt neaparat mutual exclusive intre ele, dar fiecare
-  // rezervare apare o singura data in categoria ei "principala" pentru lista de mai jos,
-  // ca sa nu se dubleze vizual. Ordinea de prioritate: check-in azi > check-out azi >
-  // cazat in curs > viitor.
   var categorized = useMemo(function() {
-    var checkinToday = [], checkoutToday = [], staying = [], future = [];
-    reservations.forEach(function(r) {
-      if (!r.checkIn) return;
-      var checkOut = addDays(r.checkIn, r.nights || 0);
-      if (checkOut < today) return; // sejur incheiat — nu se mai arata in lista activa
-
-      if (r.checkIn === today) {
-        if (r.checkedIn) { staying.push(r); } else { checkinToday.push(r); }
-      } else if (checkOut === today) {
-        checkoutToday.push(r);
-      } else if (r.checkIn < today && checkOut > today) {
-        staying.push(r);
-      } else if (r.checkIn > today) {
-        future.push(r);
-      }
-    });
-    var byCheckIn = function(a, b) { return (a.checkIn || '') < (b.checkIn || '') ? -1 : (a.checkIn || '') > (b.checkIn || '') ? 1 : ((a.room || '') < (b.room || '') ? -1 : 1); };
-    checkinToday.sort(byCheckIn);
-    checkoutToday.sort(byCheckIn);
-    staying.sort(byCheckIn);
-    future.sort(byCheckIn);
-    return { checkinToday: checkinToday, checkoutToday: checkoutToday, staying: staying, future: future };
+    return categorizeReservations(reservations, today);
   }, [reservations, today]);
 
-  var totalActive = categorized.checkinToday.length + categorized.checkoutToday.length + categorized.staying.length + categorized.future.length;
+  var libere = useMemo(function() {
+    return getFreeRooms(rooms, reservations, today);
+  }, [rooms, reservations, today]);
 
   function rowProps(res, checkType) {
     return {
@@ -1006,12 +1172,9 @@ function ResTab(props) {
     };
   }
 
-  // Randeaza o sectiune (Intrari azi / Iesiri azi / etc), optional impartita pe camere
-  // daca viewMode === 'room'. checkType: 'checkin' | 'checkout' | null — determina ce bifa
-  // se afiseaza pe cardurile din aceasta sectiune.
-  function renderSection(title, icon, list, bgColor, checkType) {
-    if (list.length === 0) return null;
-    var body;
+  // Randeaza lista curenta (filtrata deja pe categoria activa), optional impartita
+  // pe camere daca viewMode === 'room'. checkType determina ce bifa apare pe carduri.
+  function renderList(list, checkType) {
     if (viewMode === 'room') {
       var byRoom = {};
       list.forEach(function(r) {
@@ -1019,9 +1182,8 @@ function ResTab(props) {
         if (!byRoom[rm]) byRoom[rm] = [];
         byRoom[rm].push(r);
       });
-      // Pastreaza ordinea camerelor asa cum sunt definite in config, plus orice camera extra gasita in date
       var roomOrder = rooms.concat(Object.keys(byRoom).filter(function(r) { return rooms.indexOf(r) === -1; }));
-      body = roomOrder.filter(function(rm) { return byRoom[rm] && byRoom[rm].length; }).map(function(rm) {
+      return roomOrder.filter(function(rm) { return byRoom[rm] && byRoom[rm].length; }).map(function(rm) {
         return h('div', { key: rm, style: { marginBottom: 10 } },
           h('div', { style: { fontSize: 12.5, fontWeight: 700, color: '#64748b', padding: '4px 4px', display: 'flex', alignItems: 'center', gap: 6 } },
             '\uD83D\uDEAA ' + rm, h('span', { style: { opacity: .6, fontWeight: 600 } }, '(' + byRoom[rm].length + ')')
@@ -1029,22 +1191,23 @@ function ResTab(props) {
           byRoom[rm].map(function(res) { return h(ResRow, rowProps(res, checkType)); })
         );
       });
-    } else {
-      body = list.map(function(res) { return h(ResRow, rowProps(res, checkType)); });
     }
-    return h('div', { style: { marginBottom: 20 } },
-      h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: bgColor || '#1e3a5f', borderRadius: 10, color: '#fff', marginBottom: 8 } },
-        h('span', { style: { fontWeight: 800, fontSize: 15 } }, icon + ' ' + title),
-        h('span', { style: { fontSize: 13, opacity: .8 } }, list.length + ' rez.')
-      ),
-      body
-    );
+    return list.map(function(res) { return h(ResRow, rowProps(res, checkType)); });
   }
 
+  // Configuratia fiecarui filtru: titlu, lista, checkType, mesaj gol
+  var filterConfig = {
+    checkin: { title: 'Sosiri azi', icon: '\uD83D\uDFE2', list: categorized.checkinToday, checkType: 'checkin', emptyMsg: 'Nicio sosire azi', emptyIcon: '\uD83D\uDFE2' },
+    checkout: { title: 'Plecari azi', icon: '\uD83D\uDD34', list: categorized.checkoutToday, checkType: 'checkout', emptyMsg: 'Nicio plecare azi', emptyIcon: '\uD83D\uDD34' },
+    staying: { title: 'Cazati in curs', icon: '\uD83C\uDFE8', list: categorized.staying, checkType: null, emptyMsg: 'Nicio camera ocupata acum', emptyIcon: '\uD83C\uDFE8' },
+    future: { title: 'Rezervari viitoare', icon: '\uD83D\uDCC5', list: categorized.future, checkType: null, emptyMsg: 'Nicio rezervare viitoare', emptyIcon: '\uD83D\uDCC5' }
+  };
+
+  var current = filterConfig[filter];
+
   return h('div', { className: 'page' },
-    // Buton adauga nou
+    // Buton adauga nou + toggle General/Pe camere
     h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8, flexWrap: 'wrap' } },
-      // Toggle General / Pe camere
       h('div', { style: { display: 'flex', background: '#f1f5f9', borderRadius: 10, padding: 3, gap: 2 } },
         h('button', {
           style: { padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', background: viewMode === 'general' ? '#fff' : 'none', color: viewMode === 'general' ? '#2563eb' : '#64748b', boxShadow: viewMode === 'general' ? '0 1px 4px rgba(0,0,0,.1)' : 'none' },
@@ -1067,21 +1230,50 @@ function ResTab(props) {
       conflicts.map(function(c, i) { return c.room + ' (' + fmt(c.from) + ')'; }).join(', ')
     ),
 
-    totalActive === 0
-      ? h('div', { style: { textAlign: 'center', padding: '40px 20px', color: '#94a3b8' } },
-          h('div', { style: { fontSize: 48, marginBottom: 12 } }, '\uD83C\uDFE1'),
-          h('div', { style: { fontSize: 16, fontWeight: 600 } }, 'Nicio rezervare activa'),
-          h('div', { style: { fontSize: 13, marginTop: 6 } }, 'Apasa "+ Rezervare noua" pentru a adauga')
+    // ── CONTINUT: DOAR sectiunea filtrului activ ──────────────────────────────
+    filter === 'free'
+      ? h('div', null,
+          h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: '#16a34a', borderRadius: 10, color: '#fff', marginBottom: 8 } },
+            h('span', { style: { fontWeight: 800, fontSize: 15 } }, '\uD83D\uDFE2 Camere libere acum'),
+            h('span', { style: { fontSize: 13, opacity: .8 } }, libere.length + ' camere')
+          ),
+          libere.length === 0
+            ? h('div', { style: { textAlign: 'center', padding: '40px 20px', color: '#94a3b8' } },
+                h('div', { style: { fontSize: 48, marginBottom: 12 } }, '\uD83D\uDD34'),
+                h('div', { style: { fontSize: 16, fontWeight: 600 } }, 'Toate camerele sunt ocupate acum')
+              )
+            : h('div', null,
+                libere.map(function(room) {
+                  return h('div', { key: room, className: 'card', style: { padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 } },
+                    h('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } },
+                      h('span', { style: { fontSize: 22 } }, '\uD83D\uDFE2'),
+                      h('span', { style: { fontSize: 16, fontWeight: 700, color: '#1a202c' } }, room)
+                    ),
+                    h('button', {
+                      style: { padding: '9px 16px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 9, fontWeight: 700, fontSize: 13, cursor: 'pointer' },
+                      onClick: function() { props.onNew(room); }
+                    }, '+ Rezerva')
+                  );
+                })
+              )
         )
       : h('div', null,
-          renderSection('Intrari azi', '\uD83D\uDFE2', categorized.checkinToday, '#16a34a', 'checkin'),
-          renderSection('Iesiri azi', '\uD83D\uDD34', categorized.checkoutToday, '#dc2626', 'checkout'),
-          renderSection('Cazati in curs', '\uD83C\uDFE8', categorized.staying, '#2563eb'),
-          renderSection('Intrari viitoare', '\uD83D\uDCC5', categorized.future, '#1e3a5f')
+          current.list.length === 0
+            ? h('div', { style: { textAlign: 'center', padding: '40px 20px', color: '#94a3b8' } },
+                h('div', { style: { fontSize: 48, marginBottom: 12 } }, current.emptyIcon),
+                h('div', { style: { fontSize: 16, fontWeight: 600 } }, current.emptyMsg)
+              )
+            : h('div', null,
+                h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: '#1e3a5f', borderRadius: 10, color: '#fff', marginBottom: 8 } },
+                  h('span', { style: { fontWeight: 800, fontSize: 15 } }, current.icon + ' ' + current.title),
+                  h('span', { style: { fontSize: 13, opacity: .8 } }, current.list.length + ' rez.')
+                ),
+                renderList(current.list, current.checkType)
+              )
         ),
 
     // Buton adauga per camera
-    h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 } },
+    h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 20, marginBottom: 12 } },
       rooms.map(function(room) {
         return h('button', {
           key: room,
@@ -1855,6 +2047,22 @@ function Drawer(props) {
           h('div', { className: 'dtxt' },
             h('div', { className: 'dnm' }, 'Mesaje WhatsApp'),
             h('div', { className: 'dsub' }, '10 template-uri gata de folosit')
+          ),
+          h('span', { className: 'darr' }, '\u203A')
+        ),
+        h('div', { className: 'ditem', onClick: function() { props.onOpenAvailability(); props.onClose(); } },
+          h('span', { className: 'dico' }, '\uD83D\uDD0D'),
+          h('div', { className: 'dtxt' },
+            h('div', { className: 'dnm' }, 'Verifica disponibilitate'),
+            h('div', { className: 'dsub' }, 'Cauta camere libere pe o data')
+          ),
+          h('span', { className: 'darr' }, '\u203A')
+        ),
+        h('div', { className: 'ditem', onClick: function() { props.onOpenBookingRules(); props.onClose(); } },
+          h('span', { className: 'dico' }, '\uD83D\uDECF\uFE0F'),
+          h('div', { className: 'dtxt' },
+            h('div', { className: 'dnm' }, 'Reguli de cazare'),
+            h('div', { className: 'dsub' }, 'Pauza intre rezervari, sejur minim, preaviz')
           ),
           h('span', { className: 'darr' }, '\u203A')
         ),
@@ -3530,183 +3738,43 @@ function MessagesMgr(props) {
   );
 }
 
+// ── TODAY BAR — acum e un SELECTOR DE FILTRU, nu un panou de statistici ────────
+// Fiecare cadran, la click, schimba filtrul activ din App (props.activeFilter /
+// props.onFilterChange), care determina ce sectiune se afiseaza in ResTab mai jos.
+// Un singur cadran e "activ" la un moment dat, evidentiat vizual.
 function TodayBar(props) {
-  var reservations = props.reservations, rooms = props.rooms, sources = props.sources;
+  var reservations = props.reservations, rooms = props.rooms;
   var tod = todayStr();
-  var tmr = addDays(tod, 1);
+  var activeFilter = props.activeFilter;
 
-  // State pentru popup
-  var ps = useState(null); var popup = ps[0], setPopup = ps[1];
-
-  // Rezervarile in curs (cazati acum, checkIn <= azi < checkout, nu blocate)
-  var inCursRez = useMemo(function() {
-    return reservations.filter(function(r) {
-      return r.checkIn <= tod &&
-             addDays(r.checkIn, r.nights || 0) > tod &&
-             r.status !== 'blocked';
-    });
+  var categorized = useMemo(function() {
+    return categorizeReservations(reservations, tod);
   }, [reservations, tod]);
 
-  // Camere ocupate acum
-  var ocupate = useMemo(function() {
-    var set = new Set(inCursRez.map(function(r) { return r.room; }));
-    return rooms.filter(function(room) { return set.has(room); });
-  }, [inCursRez, rooms]);
-
-  // Camere blocate azi
-  var blocateRooms = useMemo(function() {
-    return rooms.filter(function(room) {
-      return reservations.some(function(r) {
-        return r.room === room && r.status === 'blocked' &&
-               r.checkIn <= tod && addDays(r.checkIn, r.nights || 0) > tod;
-      });
-    });
-  }, [reservations, rooms, tod]);
-
-  // Plecari azi — cazati acum SI checkout = azi
-  var plecariAzi = useMemo(function() {
-    return reservations.filter(function(r) {
-      return addDays(r.checkIn, r.nights || 0) === tod && r.status !== 'blocked';
-    });
-  }, [reservations, tod]);
-
-  // Sosiri azi
-  var sosiriAzi = useMemo(function() {
-    return reservations.filter(function(r) {
-      return r.checkIn === tod && r.status !== 'blocked';
-    });
-  }, [reservations, tod]);
-
-  // Sosiri maine
-  var sosiriMaine = useMemo(function() {
-    return reservations.filter(function(r) {
-      return r.checkIn === tmr && r.status !== 'blocked';
-    });
-  }, [reservations, tmr]);
-
-  // Camere libere (nu ocupate, nu blocate)
-  var ocupateSet = new Set(ocupate.concat(blocateRooms));
-  var libere = rooms.filter(function(r) { return !ocupateSet.has(r); });
-
-  function openPopup(type) {
-    var title, list, color, renderItem;
-    if (type === 'ocupate') {
-      title = '\uD83D\uDFE0 Cazati acum';
-      color = '#d97706';
-      list = inCursRez;
-      renderItem = function(r) {
-        var co = addDays(r.checkIn, r.nights || 0);
-        var rest = (r.pricePerNight||0)*(r.nights||0) - (r.advance||0);
-        return {
-          main: fullName(r),
-          sub: r.room + ' \u00B7 plecare ' + fmt(co) + (rest > 0 ? ' \u00B7 rest ' + rest + ' lei' : ''),
-          phone: r.phone
-        };
-      };
-    } else if (type === 'libere') {
-      title = '\uD83D\uDFE2 Camere libere azi';
-      color = '#16a34a';
-      list = libere.map(function(room) { return { _room: room }; });
-      renderItem = function(r) { return { main: r._room, sub: 'Libera' }; };
-    } else if (type === 'plecari') {
-      title = '\uD83D\uDEAA Plecari azi';
-      color = '#92400e';
-      list = plecariAzi;
-      renderItem = function(r) {
-        return {
-          main: fullName(r),
-          sub: r.room + ' \u00B7 check-in ' + fmt(r.checkIn),
-          phone: r.phone
-        };
-      };
-    } else if (type === 'sosiriAzi') {
-      title = '\uD83D\uDFE2 Sosiri azi';
-      color = '#1d4ed8';
-      list = sosiriAzi;
-      renderItem = function(r) {
-        var co = addDays(r.checkIn, r.nights || 0);
-        return {
-          main: fullName(r),
-          sub: r.room + ' \u00B7 ' + r.nights + ' nopti \u00B7 checkout ' + fmt(co),
-          phone: r.phone
-        };
-      };
-    } else if (type === 'sosiriMaine') {
-      title = '\uD83D\uDCC5 Sosiri maine';
-      color = '#2563eb';
-      list = sosiriMaine;
-      renderItem = function(r) {
-        var co = addDays(r.checkIn, r.nights || 0);
-        return {
-          main: fullName(r),
-          sub: r.room + ' \u00B7 ' + r.nights + ' nopti \u00B7 checkout ' + fmt(co),
-          phone: r.phone
-        };
-      };
-    }
-    setPopup({ title: title, color: color, list: list, renderItem: renderItem });
-  }
+  var libere = useMemo(function() {
+    return getFreeRooms(rooms, reservations, tod);
+  }, [rooms, reservations, tod]);
 
   var cells = [
-    { num: ocupate.length, lbl: 'Ocupate', color: ocupate.length > 0 ? 'amber' : '', type: 'ocupate' },
-    { num: libere.length, lbl: 'Libere', color: libere.length > 0 ? 'green' : '', type: 'libere' },
-    { num: plecariAzi.length, lbl: 'Plecari azi', color: plecariAzi.length > 0 ? 'amber' : '', type: 'plecari' },
-    { num: sosiriAzi.length, lbl: 'Sosiri azi', color: sosiriAzi.length > 0 ? 'blue' : '', type: 'sosiriAzi' },
-    { num: sosiriMaine.length, lbl: 'Sosiri maine', color: sosiriMaine.length > 0 ? 'blue' : '', type: 'sosiriMaine' },
+    { num: categorized.staying.length, lbl: 'Ocupate', color: categorized.staying.length > 0 ? 'amber' : '', type: 'staying' },
+    { num: libere.length, lbl: 'Libere', color: libere.length > 0 ? 'green' : '', type: 'free' },
+    { num: categorized.checkoutToday.length, lbl: 'Plecari azi', color: categorized.checkoutToday.length > 0 ? 'amber' : '', type: 'checkout' },
+    { num: categorized.checkinToday.length, lbl: 'Sosiri azi', color: categorized.checkinToday.length > 0 ? 'blue' : '', type: 'checkin' },
+    { num: categorized.future.length, lbl: 'Rezervari', color: categorized.future.length > 0 ? 'blue' : '', type: 'future' }
   ];
 
-  return h(Fragment, null,
-    h('div', { className: 'tod-bar' },
-      h('div', { className: 'tod-bar-inner' },
-        cells.map(function(cell) {
-          return h('div', {
-            key: cell.type,
-            className: 'tod-cell ' + (cell.color || ''),
-            onClick: function() { openPopup(cell.type); }
-          },
-            h('div', { className: 'tod-num' }, cell.num),
-            h('div', { className: 'tod-lbl' }, cell.lbl)
-          );
-        })
-      )
-    ),
-
-    // POPUP modal
-    popup && h('div', {
-      style: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 300, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' },
-      onClick: function() { setPopup(null); }
-    },
-      h('div', {
-        style: { background: '#fff', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 640, maxHeight: '80vh', display: 'flex', flexDirection: 'column', paddingBottom: 'env(safe-area-inset-bottom)' },
-        onClick: function(e) { e.stopPropagation(); }
-      },
-        // Header popup
-        h('div', { style: { background: popup.color, color: '#fff', padding: '16px 18px', borderRadius: '20px 20px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
-          h('span', { style: { fontSize: 18, fontWeight: 800 } }, popup.title),
-          h('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } },
-            h('span', { style: { background: 'rgba(255,255,255,.25)', padding: '3px 10px', borderRadius: 10, fontSize: 14, fontWeight: 700 } }, popup.list.length + ' total'),
-            h('button', { onClick: function() { setPopup(null); }, style: { background: 'rgba(255,255,255,.2)', border: 'none', color: '#fff', width: 32, height: 32, borderRadius: '50%', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' } }, '\u2715')
-          )
-        ),
-        // Lista
-        h('div', { style: { overflowY: 'auto', flex: 1, padding: '8px 0' } },
-          popup.list.length === 0
-            ? h('div', { style: { textAlign: 'center', padding: '30px 20px', color: '#94a3b8', fontSize: 15 } }, 'Nicio inregistrare')
-            : popup.list.map(function(r, i) {
-                var item = popup.renderItem(r);
-                return h('div', { key: i, style: { padding: '12px 18px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 12 } },
-                  h('div', { style: { flex: 1, minWidth: 0 } },
-                    h('div', { style: { fontSize: 16, fontWeight: 700, color: '#1a202c' } }, item.main),
-                    h('div', { style: { fontSize: 13, color: '#64748b', marginTop: 2 } }, item.sub)
-                  ),
-                  item.phone && h('div', { style: { display: 'flex', gap: 6, flexShrink: 0 } },
-                    h('a', { href: 'tel:' + item.phone, style: { width: 36, height: 36, borderRadius: 9, background: '#dbeafe', color: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' } }, h(IPhone)),
-                    h('a', { href: waUrl(item.phone), target: '_blank', rel: 'noopener', style: { width: 36, height: 36, borderRadius: 9, background: '#dcfce7', color: '#15803d', display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' } }, h(IWa))
-                  )
-                );
-              })
-        )
-      )
+  return h('div', { className: 'tod-bar' },
+    h('div', { className: 'tod-bar-inner' },
+      cells.map(function(cell) {
+        return h('div', {
+          key: cell.type,
+          className: 'tod-cell ' + (cell.color || '') + (activeFilter === cell.type ? ' active' : ''),
+          onClick: function() { props.onFilterChange(cell.type); }
+        },
+          h('div', { className: 'tod-num' }, cell.num),
+          h('div', { className: 'tod-lbl' }, cell.lbl)
+        );
+      })
     )
   );
 }
