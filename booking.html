@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rezervare online</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75'>🏠</text></svg>">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1a202c; background: #f0f4f8; min-height: 100vh; }
+    .wrap { max-width: 480px; margin: 0 auto; padding: 20px 16px 60px; }
+    .hdr { text-align: center; padding: 30px 0 20px; }
+    .hdr img { width: 72px; height: 72px; border-radius: 16px; object-fit: cover; margin-bottom: 10px; }
+    .hdr h1 { font-size: 22px; font-weight: 800; }
+    .hdr p { font-size: 14px; color: #64748b; margin-top: 4px; }
+
+    .card { background: #fff; border-radius: 16px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+    .fld { margin-bottom: 14px; }
+    .fld label { display: block; font-size: 12.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .3px; margin-bottom: 6px; }
+    .fld input, .fld select, .fld textarea { width: 100%; padding: 13px 14px; border: 2px solid #d1d9e0; border-radius: 10px; font-size: 16px; outline: none; font-family: inherit; }
+    .fld input:focus, .fld select:focus, .fld textarea:focus { border-color: #2563eb; }
+    .fld textarea { resize: vertical; min-height: 70px; }
+
+    .room-opt { display: flex; align-items: center; justify-content: space-between; padding: 14px; border: 2px solid #e2e8f0; border-radius: 12px; margin-bottom: 8px; cursor: pointer; }
+    .room-opt.selected { border-color: #2563eb; background: #eff6ff; }
+    .room-opt .name { font-weight: 700; font-size: 15px; }
+    .room-opt .price { font-size: 14px; color: #64748b; }
+
+    .summary { background: #f8fafc; border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; font-size: 14px; }
+    .summary-row { display: flex; justify-content: space-between; padding: 4px 0; }
+    .summary-row.total { font-weight: 800; font-size: 16px; border-top: 1px solid #e2e8f0; margin-top: 6px; padding-top: 10px; }
+
+    .btn-submit { width: 100%; padding: 16px; background: #2563eb; color: #fff; border: none; border-radius: 12px; font-weight: 800; font-size: 16px; cursor: pointer; }
+    .btn-submit:disabled { opacity: .5; cursor: default; }
+
+    .msg { text-align: center; padding: 60px 20px; }
+    .msg .icon { font-size: 56px; margin-bottom: 16px; }
+    .msg h2 { font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+    .msg p { color: #64748b; font-size: 15px; }
+
+    .err { color: #dc2626; font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+    .spin { width: 36px; height: 36px; border: 4px solid #e2e8f0; border-top-color: #2563eb; border-radius: 50%; animation: spin 1s linear infinite; margin: 60px auto; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div id="loading" style="display:block;"><div class="spin"></div></div>
+    <div id="content" style="display:none;"></div>
+  </div>
+
+  <!-- FIREBASE CDN -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/helpers.js"></script>
+
+  <script>
+  (function() {
+    'use strict';
+
+    var params = new URLSearchParams(window.location.search);
+    var pensionId = params.get('p');
+    var loadingEl = document.getElementById('loading');
+    var contentEl = document.getElementById('content');
+
+    function showError(msg) {
+      loadingEl.style.display = 'none';
+      contentEl.style.display = 'block';
+      contentEl.innerHTML = '<div class="msg"><div class="icon">\u26A0\uFE0F</div><h2>Nu putem incarca pagina</h2><p>' + msg + '</p></div>';
+    }
+
+    if (!pensionId) {
+      showError('Link invalid — lipseste identificatorul pensiunii.');
+      return;
+    }
+
+    firebase.initializeApp(firebaseConfig);
+    var auth = firebase.auth();
+    var db = firebase.database();
+
+    auth.signInAnonymously().then(function() {
+      return db.ref('pensions/' + pensionId + '/config').once('value');
+    }).then(function(snap) {
+      var config = snap.val();
+      if (!config) { showError('Aceasta pensiune nu a fost gasita.'); return; }
+      renderForm(config);
+    }).catch(function(err) {
+      console.error('Booking init error:', err);
+      showError('A aparut o eroare tehnica. Incearca din nou mai tarziu.');
+    });
+
+    function renderForm(config) {
+      loadingEl.style.display = 'none';
+      contentEl.style.display = 'block';
+
+      var rooms = config.rooms || [];
+      var roomPrices = config.roomPrices || {};
+      var pensionName = config.pensionName || 'Pensiune';
+      var pensionPhoto = config.pensionPhoto || '';
+
+      if (rooms.length === 0) {
+        contentEl.innerHTML = '<div class="msg"><div class="icon">\uD83D\uDEA7</div><h2>Rezervari indisponibile momentan</h2><p>Aceasta pensiune nu are inca camere configurate. Suna direct pentru rezervare.</p></div>';
+        return;
+      }
+
+      var todayStr = new Date().toISOString().slice(0, 10);
+      var state = { room: '', checkIn: todayStr, nights: 1, firstName: '', lastName: '', phone: '', comments: '' };
+
+      contentEl.innerHTML =
+        '<div class="hdr">' +
+          (pensionPhoto ? '<img src="' + pensionPhoto + '">' : '') +
+          '<h1>' + escapeHtml(pensionName) + '</h1>' +
+          '<p>Trimite o cerere de rezervare</p>' +
+        '</div>' +
+        '<div class="card">' +
+          '<div class="fld"><label>Camera</label><div id="room-list"></div></div>' +
+          '<div class="fld"><label>Data check-in</label><input type="date" id="f-checkin" min="' + todayStr + '" value="' + todayStr + '"></div>' +
+          '<div class="fld"><label>Numar de nopti</label><input type="number" id="f-nights" min="1" value="1"></div>' +
+          '<div class="fld"><label>Nume</label><input type="text" id="f-firstname" placeholder="Prenume"></div>' +
+          '<div class="fld"><label>Nume de familie</label><input type="text" id="f-lastname" placeholder="Nume de familie"></div>' +
+          '<div class="fld"><label>Telefon</label><input type="tel" id="f-phone" placeholder="07xx xxx xxx"></div>' +
+          '<div class="fld"><label>Mesaj (optional)</label><textarea id="f-comments" placeholder="Cerinte speciale, ora aproximativa de sosire etc."></textarea></div>' +
+        '</div>' +
+        '<div class="summary" id="summary" style="display:none;"></div>' +
+        '<div id="form-err" class="err" style="display:none;"></div>' +
+        '<button class="btn-submit" id="btn-submit">Trimite cererea de rezervare</button>';
+
+      var roomListEl = document.getElementById('room-list');
+      rooms.forEach(function(room) {
+        var opt = document.createElement('div');
+        opt.className = 'room-opt';
+        opt.innerHTML = '<span class="name">\uD83D\uDEAA ' + escapeHtml(room) + '</span><span class="price">' + (roomPrices[room] ? roomPrices[room] + ' lei/noapte' : '') + '</span>';
+        opt.addEventListener('click', function() {
+          state.room = room;
+          Array.from(roomListEl.children).forEach(function(c) { c.classList.remove('selected'); });
+          opt.classList.add('selected');
+          updateSummary();
+        });
+        roomListEl.appendChild(opt);
+      });
+
+      var checkinEl = document.getElementById('f-checkin');
+      var nightsEl = document.getElementById('f-nights');
+      checkinEl.addEventListener('change', function() { state.checkIn = checkinEl.value; updateSummary(); });
+      nightsEl.addEventListener('input', function() { state.nights = parseInt(nightsEl.value) || 1; updateSummary(); });
+
+      function updateSummary() {
+        var summaryEl = document.getElementById('summary');
+        if (!state.room) { summaryEl.style.display = 'none'; return; }
+        var price = roomPrices[state.room] || 0;
+        var total = price * (state.nights || 1);
+        var checkOut = addDays(state.checkIn, state.nights || 1);
+        summaryEl.style.display = 'block';
+        summaryEl.innerHTML =
+          '<div class="summary-row"><span>Perioada</span><span>' + fmt(state.checkIn) + ' \u2192 ' + fmt(checkOut) + '</span></div>' +
+          '<div class="summary-row"><span>Nopti</span><span>' + (state.nights || 1) + '</span></div>' +
+          (price > 0 ? '<div class="summary-row total"><span>Total estimat</span><span>' + total + ' lei</span></div>' : '') +
+          '<div style="font-size:12px;color:#94a3b8;margin-top:8px;">Aceasta e o cerere, nu o confirmare finala. Pensiunea te va contacta.</div>';
+      }
+
+      document.getElementById('btn-submit').addEventListener('click', function() {
+        var errEl = document.getElementById('form-err');
+        errEl.style.display = 'none';
+
+        state.firstName = document.getElementById('f-firstname').value.trim();
+        state.lastName = document.getElementById('f-lastname').value.trim();
+        state.phone = document.getElementById('f-phone').value.trim();
+        state.comments = document.getElementById('f-comments').value.trim();
+
+        if (!state.room) { errEl.textContent = 'Alege o camera.'; errEl.style.display = 'block'; return; }
+        if (!state.firstName || !state.phone) { errEl.textContent = 'Completeaza numele si telefonul.'; errEl.style.display = 'block'; return; }
+
+        var btn = document.getElementById('btn-submit');
+        btn.disabled = true;
+        btn.textContent = 'Se trimite...';
+
+        var newRes = {
+          room: state.room,
+          firstName: state.firstName,
+          lastName: state.lastName,
+          phone: state.phone,
+          checkIn: state.checkIn,
+          nights: state.nights || 1,
+          pricePerNight: roomPrices[state.room] || 0,
+          advance: 0,
+          source: 'Site Rezervari',
+          comments: state.comments,
+          status: 'pending',
+          pendingConfirmation: true,
+          createdAt: Date.now()
+        };
+
+        db.ref('pensions/' + pensionId + '/reservations').push(newRes)
+          .then(function() {
+            contentEl.innerHTML = '<div class="msg"><div class="icon">\u2705</div><h2>Cerere trimisa!</h2><p>' + escapeHtml(pensionName) + ' te va contacta in curand pentru confirmare.</p></div>';
+          })
+          .catch(function(err) {
+            console.error('Submit error:', err);
+            btn.disabled = false;
+            btn.textContent = 'Trimite cererea de rezervare';
+            errEl.textContent = 'Eroare la trimitere. Incearca din nou.';
+            errEl.style.display = 'block';
+          });
+      });
+    }
+
+    function escapeHtml(s) {
+      var d = document.createElement('div');
+      d.textContent = s || '';
+      return d.innerHTML;
+    }
+  })();
+  </script>
+</body>
+</html>

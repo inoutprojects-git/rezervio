@@ -16,7 +16,7 @@
       "$pensionId": {
         ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || root.child('users').child(auth.uid).child('pensionId').val() === $pensionId)",
 
-        ".write": "auth != null && !data.exists() && newData.child('ownerUid').val() === auth.uid",
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (!data.exists() && newData.child('ownerUid').val() === auth.uid))",
 
         "plan": {
           ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (!data.exists() && root.child('users').child(auth.uid).child('pensionId').val() === $pensionId))"
@@ -48,11 +48,16 @@
         },
 
         "config": {
+          ".read": "auth != null",
           ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (root.child('users').child(auth.uid).child('pensionId').val() === $pensionId && (root.child('users').child(auth.uid).child('role').val() === 'owner' || root.child('users').child(auth.uid).child('role').val() === 'staff')))"
         },
 
         "reservations": {
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (root.child('users').child(auth.uid).child('pensionId').val() === $pensionId && (root.child('users').child(auth.uid).child('role').val() === 'owner' || root.child('users').child(auth.uid).child('role').val() === 'staff')))"
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (root.child('users').child(auth.uid).child('pensionId').val() === $pensionId && (root.child('users').child(auth.uid).child('role').val() === 'owner' || root.child('users').child(auth.uid).child('role').val() === 'staff')))",
+
+          "$resId": {
+            ".write": "auth != null && ((root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (root.child('users').child(auth.uid).child('pensionId').val() === $pensionId && (root.child('users').child(auth.uid).child('role').val() === 'owner' || root.child('users').child(auth.uid).child('role').val() === 'staff'))) || (!data.exists() && newData.child('pendingConfirmation').val() === true && newData.child('source').val() === 'Site Rezervari'))"
+          }
         },
 
         "supportChat": {

@@ -1,104 +1,56 @@
-# Rezervario Split Structure
+# Rezervio — Structura Proiectului
 
-## Arhitectura după split
-
-Aplicația e împărțită în fișiere logice pentru ușurință de mentenanță și scalabilitate:
+## Arhitectura fișierelor
 
 ```
 rezervio/
-├── index.html                    # HTML pură + Firebase init + auth UI
+├── index.html                    # LANDING PAGE publică (marketing, prețuri, FAQ)
+├── app.html                      # APLICAȚIA REALĂ (login + tot ce era înainte în index.html)
+├── booking.html                  # Pagina PUBLICĂ de rezervare online (fără login, auth anonimă)
 ├── js/
-│   ├── config.js                 # Firebase config, constante globale, variables
+│   ├── config.js                 # Firebase config, constante globale
 │   ├── helpers.js                # Funcții helper (date, URL-uri, validări)
 │   ├── icons.js                  # Iconițe SVG React
-│   ├── templates.js              # Șabloane WhatsApp + variabile
-│   └── app.js                    # App root + stări + toți callback-urile
-│                                 # (nu include componente — alea vin mai târziu)
+│   ├── templates.js              # Șabloane WhatsApp
+│   └── app.js                    # Toate componentele React (App, NetworkAdminDashboard, etc.)
 ├── css/
-│   └── styles.css                # Tot CSS-ul, **nu** inline în script
-├── sw.js                         # Service Worker (PWA + push notifications)
-├── manifest.json                 # PWA manifest
+│   └── styles.css                # Tot CSS-ul
+├── sw.js                         # Service Worker (PWA)
+├── manifest.json                 # PWA manifest — start_url = /app.html
+├── database.rules.json           # Reguli Firebase Realtime Database
+├── SETUP_ROLURI.md               # Ghid bootstrap Network Admin
 └── SPLIT_INFO.md                 # Acest fișier
 ```
 
+## ⚠️ Schimbare importantă de rutare (de la split-ul cu landing page)
+
+- **`rezervio.netlify.app/`** → landing page public (marketing)
+- **`rezervio.netlify.app/app.html`** → aplicația reală (login/rezervări) — **folosește acest link tu și clienții existenți**
+- **`rezervio.netlify.app/booking.html?p=PENSION_ID`** → pagină publică de rezervare, unică per pensiune (link generat din aplicație: Configurare → Prețuri → tab Link)
+
+Dacă ai bookmark-uri vechi către root sau `index.html`, actualizează-le spre `app.html`.
+
+## ⚠️ Pas obligatoriu: activează Autentificarea Anonimă în Firebase
+
+`booking.html` are nevoie de autentificare anonimă (vizitatorii nu se loghează, dar tot au nevoie de un `auth.uid` valid pentru ca regulile Firebase să le permită să citească prețurile și să trimită o cerere). Fără acest pas, pagina de rezervare nu va funcționa.
+
+1. Firebase Console → **Authentication** → tab **Sign-in method**
+2. Găsește **Anonymous** în listă → click → **Enable** → Save
+
 ## De ce split-ul ăsta?
 
-1. **index.html e curat** — doar HTML, fără o sută de linii de JS inline
-2. **config.js e singular** — o singură sursă de adevăr pentru Firebase + constante
-3. **helpers.js e reutilizabil** — funcții importantă de oriunde
-4. **templates.js e update-abil** — adaugă șabloane WhatsApp fără să atingi alt cod
-5. **app.js va fi componentul root** — gestionează stare și lanseaza toți hook-urile
-6. **styles.css e separată** — CSS mai ușor de debugged și de customizat
-7. **Componente viitoare** — vor fi în fișiere separate (`components/ResTab.js`, etc.)
+1. **Separare clară de scop** — landing page (marketing, SEO, achiziție) vs aplicație (produs) vs booking (public, fără cont)
+2. **`config.js`/`helpers.js`/`icons.js`** — reutilizate de `app.html` ȘI `booking.html` (booking.html încarcă doar `config.js`+`helpers.js`, nu tot `app.js`, ca să rămână ușor)
+3. **Securitate** — `booking.html` rulează cu autentificare anonimă, cu permisiuni Firebase strict limitate (citește doar prețuri/camere, poate doar crea cereri noi marcate distinct, nu poate citi/edita rezervări existente)
 
-## Flow-ul de inițializare
+## Fluxul de rezervare online
 
-1. **index.html** încarcă Firebase CDN + React + linkuri la scripturi
-2. **config.js** e primul — definește variabilele globale și constante
-3. **helpers.js** e după — depinde de constante din config.js
-4. **icons.js** e după — iconițe pure, fără dependențe
-5. **templates.js** e după — depinde de helpers
-6. **app.js** e ultima — cuprinde App root + state management
-7. **Firebase init** (în index.html script block 1) apelează `window.startApp()` după ce `PENSION_ID` e populat
-
-## TODO: Componente de mutat în fișiere separate
-
-Aceste componente sunt momentan **la comentariu** în `index-backup.html`, dar ar trebui să le extragi în fișiere proprii după ce confirm asta:
-
-```
-js/components/
-├── Drawer.js
-├── ResTab.js
-├── ResRow.js
-├── ResDetail.js
-├── CalTab.js
-├── StatsTab.js
-├── ArchiveTab.js
-├── ArchiveRow.js
-├── MessagesMgr.js
-├── TodayBar.js
-├── RoomMgr.js
-├── SrcMgr.js
-├── ICalMgr.js
-├── PdfExport.js
-├── PricesMgr.js
-├── ResMdl.js
-├── Confirm.js
-├── PensionSettings.js
-├── AccountSettings.js
-└── BillingInfo.js
-```
-
-## Schimburi necesare pentru a merge
-
-1. **app.js** trebuie să importe (sau să-și definească local) pe **App component** și **startApp()**
-2. **Fiecare componentă** dinspre backup.html trebuie copiată în fișierul ei propriu — de preferat, după ce ai confirmat că todo-ul ăsta e OK
-3. **app.js** va face `import Drawer from './components/Drawer.js'` (sau echivalentul în UMD dacă vrem să evităm module)
-4. **index.html** linkează la `js/app.js` și pune `<div id="root"></div>`
-
-## De moment: ce-i gata?
-
-✅ config.js
-✅ helpers.js
-✅ icons.js
-✅ templates.js
-✅ styles.css (separate)
-✅ index.html (curat)
-❌ app.js (pe jumătate — conține App root + state, NU componentele)
-❌ components/*.js (nu sunt extrase încă)
+1. Owner-ul copiază link-ul din Configurare → Prețuri → Link (include automat `?p=PENSION_ID`)
+2. Trimite link-ul clienților (WhatsApp, site propriu, rețele sociale)
+3. Clientul alege cameră + dată, completează nume/telefon, trimite cererea
+4. Cererea apare automat în aplicație, secțiunea Rezervări, cu status "Pending" — vizibilă și în Configurare → Prețuri → tab Cereri
+5. Owner-ul confirmă (devine rezervare normală) sau refuză (se șterge)
 
 ## Cod vechi: index-backup.html
 
-În `/home/claude/rezervio/index-backup.html` am o copie integrală a versiunii Brut-4283-linii de dinainte de split. Dacă ceva lipsește, e acolo.
-
-## Pasul următor
-
-După ce validez split-ul ăsta cu tine, o să:
-1. Extrag **App component** și **startApp()** din backup și le pun în app.js
-2. Extrag fiecare componentă React într-un fișier dedicat
-3. Test că tot merge
-4. Upload pe GitHub
-
----
-
-**Ai întrebări despre split? Zii și-ți explic mai detaliat orice parte!**
+În `/home/claude/rezervio/index-backup.html` există o copie a versiunii monolitice foarte veche (dinainte de orice split), păstrată doar ca referință istorică, nu e folosită de aplicație.

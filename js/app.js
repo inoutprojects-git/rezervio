@@ -2466,7 +2466,7 @@ function PricesMgr(props) {
   var cp = useState(''); var copied = cp[0], setCopied = cp[1];
   var ts = useState('prices'); var tab = ts[0], setTab = ts[1];
 
-  var bookingUrl = window.location.origin + '/booking';
+  var bookingUrl = window.location.origin + '/booking.html?p=' + PENSION_ID;
 
   function copyLink() {
     navigator.clipboard.writeText(bookingUrl).catch(function() {

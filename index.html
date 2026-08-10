@@ -2,356 +2,232 @@
 <html lang="ro">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title id="page-title">Rezervio — Gestiune Rezervări Pensiune</title>
-  <meta name="description" content="PWA pentru gestiunea rezervărilor pensiuni mici. Firebase + React.">
-  <meta name="theme-color" content="#1e3a5f">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75' fill='%231e3a5f'>🏠</text></svg>">
-  <link rel="manifest" href="manifest.json">
-  <link rel="stylesheet" href="css/styles.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rezervio — Gestiune rezervări pentru pensiuni mici</title>
+  <meta name="description" content="Calendar, rezervări, sincronizare Booking.com și Airbnb — totul într-o aplicație simplă, făcută pentru pensiuni mici din România.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75'>🏠</text></svg>">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1a202c; background: #f0f4f8; }
-    html { scroll-behavior: smooth; }
-    .auth-tab { flex: 1; padding: 12px; border: none; background: #f1f5f9; color: #64748b; font-weight: 700; font-size: 15px; cursor: pointer; border-radius: 10px; transition: all .15s; }
-    .auth-tab.active { background: #2563eb; color: #fff; }
-    .auth-input { width: 100%; padding: 13px 14px; border: 2px solid #d1d9e0; border-radius: 10px; font-size: 15px; margin-bottom: 12px; outline: none; }
-    .auth-input:focus { border-color: #2563eb; }
-    .auth-submit { width: 100%; padding: 14px; background: #2563eb; color: #fff; border: none; border-radius: 10px; font-weight: 700; font-size: 15px; cursor: pointer; margin-top: 4px; }
-    .auth-submit:disabled { opacity: .6; cursor: default; }
-    .auth-error { color: #dc2626; font-size: 13px; font-weight: 600; margin-bottom: 12px; display: none; }
-    .auth-link { display: block; text-align: center; margin-top: 14px; color: #2563eb; font-size: 13.5px; font-weight: 600; text-decoration: none; cursor: pointer; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1a202c; line-height: 1.5; }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+    a { color: inherit; }
+
+    .hero { background: linear-gradient(135deg, #1e3a5f, #1d4ed8); color: #fff; padding: 60px 20px 80px; text-align: center; }
+    .hero-logo { font-size: 56px; margin-bottom: 10px; }
+    .hero h1 { font-size: 36px; font-weight: 800; margin-bottom: 14px; letter-spacing: -0.5px; }
+    .hero p { font-size: 18px; opacity: 0.9; max-width: 560px; margin: 0 auto 32px; }
+    .hero-cta { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    .btn { padding: 15px 28px; border-radius: 12px; font-weight: 700; font-size: 16px; text-decoration: none; display: inline-block; cursor: pointer; border: none; }
+    .btn-primary { background: #fff; color: #1d4ed8; }
+    .btn-secondary { background: rgba(255,255,255,.15); color: #fff; border: 1.5px solid rgba(255,255,255,.4); }
+
+    section { padding: 64px 20px; }
+    .section-title { text-align: center; font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+    .section-sub { text-align: center; color: #64748b; font-size: 16px; margin-bottom: 40px; }
+
+    .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px; }
+    .feature { background: #f8fafc; border-radius: 16px; padding: 26px; border: 1.5px solid #f1f5f9; }
+    .feature-icon { font-size: 30px; margin-bottom: 12px; }
+    .feature h3 { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+    .feature p { font-size: 14.5px; color: #64748b; }
+
+    .pricing-bg { background: #f0f4f8; }
+    .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; max-width: 920px; margin: 0 auto; }
+    .plan { background: #fff; border-radius: 18px; padding: 30px 26px; border: 2px solid #e2e8f0; position: relative; }
+    .plan.featured { border-color: #2563eb; box-shadow: 0 8px 30px rgba(37,99,235,.15); }
+    .plan-badge { position: absolute; top: -13px; left: 50%; transform: translateX(-50%); background: #2563eb; color: #fff; font-size: 12px; font-weight: 800; padding: 5px 16px; border-radius: 20px; white-space: nowrap; }
+    .plan h3 { font-size: 20px; font-weight: 800; margin-bottom: 6px; }
+    .plan-price { font-size: 34px; font-weight: 800; margin: 14px 0 4px; }
+    .plan-price span { font-size: 15px; font-weight: 600; color: #94a3b8; }
+    .plan-desc { font-size: 13.5px; color: #94a3b8; margin-bottom: 20px; }
+    .plan ul { list-style: none; margin-bottom: 24px; }
+    .plan li { font-size: 14.5px; padding: 7px 0; display: flex; gap: 8px; align-items: flex-start; }
+    .plan li:before { content: "✓"; color: #16a34a; font-weight: 800; flex-shrink: 0; }
+    .plan .btn { width: 100%; text-align: center; }
+
+    .faq-item { border-bottom: 1px solid #f1f5f9; padding: 18px 0; max-width: 700px; margin: 0 auto; }
+    .faq-item h4 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+    .faq-item p { font-size: 14.5px; color: #64748b; }
+
+    footer { background: #1e3a5f; color: rgba(255,255,255,.7); padding: 32px 20px; text-align: center; font-size: 13.5px; }
+    footer a { color: rgba(255,255,255,.9); text-decoration: underline; cursor: pointer; }
+
+    .modal-ov { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 300; align-items: center; justify-content: center; padding: 20px; }
+    .modal-box { background: #fff; border-radius: 16px; max-width: 520px; width: 100%; max-height: 80vh; display: flex; flex-direction: column; color: #1a202c; text-align: left; }
+    .modal-hdr { padding: 18px 20px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; }
+    .modal-body { padding: 20px; overflow-y: auto; font-size: 13.5px; line-height: 1.6; color: #374151; }
+    .modal-body p { margin-bottom: 12px; }
+
+    @media (max-width: 640px) {
+      .hero h1 { font-size: 28px; }
+      section { padding: 44px 16px; }
+    }
   </style>
 </head>
 <body>
-  <!-- LOGIN SCREEN (hidden when logged in) -->
-  <div id="login-screen" style="display:flex;min-height:100vh;background:linear-gradient(135deg, #1e3a5f, #1d4ed8);flex-direction:column;align-items:center;justify-content:center;padding:20px;gap:20px;">
-    <div style="font-size:60px;margin-bottom:20px;">🏠</div>
-    <h1 style="color:#fff;font-size:28px;font-weight:800;text-align:center;">Rezervio</h1>
-    <p style="color:rgba(255,255,255,.75);font-size:15px;text-align:center;max-width:300px;">Gestione rezervări pensiune — PWA cu Firebase</p>
 
-    <div style="background:#fff;border-radius:16px;padding:24px;width:100%;max-width:380px;box-shadow:0 10px 40px rgba(0,0,0,.25);">
-      <div style="display:flex;gap:8px;margin-bottom:22px;">
-        <button id="tab-login" class="auth-tab active" type="button">Logheaza-te</button>
-        <button id="tab-signup" class="auth-tab" type="button">Inscrie-te</button>
-      </div>
-
-      <!-- FORMULAR LOGIN -->
-      <form id="login-form" style="display:block;">
-        <input type="email" id="login-email" class="auth-input" placeholder="Email" required autocomplete="email">
-        <input type="password" id="login-password" class="auth-input" placeholder="Parola" required autocomplete="current-password">
-        <div id="login-error" class="auth-error"></div>
-        <button type="submit" id="login-submit" class="auth-submit">Intra in cont</button>
-        <a href="#" id="forgot-password" class="auth-link">Am uitat parola</a>
-      </form>
-
-      <!-- FORMULAR INSCRIERE -->
-      <form id="signup-form" style="display:none;">
-        <input type="email" id="signup-email" class="auth-input" placeholder="Email" required autocomplete="email">
-        <input type="password" id="signup-password" class="auth-input" placeholder="Parola (minim 6 caractere)" required autocomplete="new-password" minlength="6">
-        <label style="display:flex;align-items:flex-start;gap:8px;margin-bottom:14px;font-size:12.5px;color:#64748b;cursor:pointer;line-height:1.4;">
-          <input type="checkbox" id="terms-checkbox" style="margin-top:2px;flex-shrink:0;width:16px;height:16px;">
-          <span>Sunt de acord cu <a href="#" id="open-terms" style="color:#2563eb;font-weight:600;">Termenii si Conditiile</a> si <a href="#" id="open-privacy" style="color:#2563eb;font-weight:600;">Politica de Confidentialitate</a></span>
-        </label>
-        <div id="signup-error" class="auth-error"></div>
-        <button type="submit" id="signup-submit" class="auth-submit" disabled style="opacity:.5;">Creeaza cont</button>
-      </form>
+  <div class="hero">
+    <div class="hero-logo">🏠</div>
+    <h1>Rezervio</h1>
+    <p>Calendar, rezervări și sincronizare Booking.com/Airbnb — totul într-o aplicație simplă, făcută pentru pensiuni mici din România.</p>
+    <div class="hero-cta">
+      <a href="app.html" class="btn btn-primary">Începe trial gratuit — 30 de zile</a>
+      <a href="app.html" class="btn btn-secondary">Am deja cont — Loghează-te</a>
     </div>
   </div>
 
-  <!-- MODAL TERMENI SI CONDITII -->
-  <div id="terms-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;align-items:center;justify-content:center;padding:20px;">
-    <div style="background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:80vh;display:flex;flex-direction:column;">
-      <div style="padding:18px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;">
-        <strong style="font-size:17px;">Termeni si Conditii</strong>
-        <button id="close-terms" style="background:none;border:none;font-size:20px;cursor:pointer;color:#64748b;">&times;</button>
+  <section>
+    <div class="wrap">
+      <div class="section-title">Tot ce-ți trebuie, nimic în plus</div>
+      <div class="section-sub">Gândit pentru pensiuni de 4-20 camere, nu pentru lanțuri hoteliere</div>
+      <div class="features">
+        <div class="feature">
+          <div class="feature-icon">📅</div>
+          <h3>Calendar &amp; rezervări</h3>
+          <p>Vezi dintr-o privire cine sosește azi, cine pleacă, ce camere sunt libere. Fără hârtii, fără Excel.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">🔄</div>
+          <h3>Sincronizare Booking &amp; Airbnb</h3>
+          <p>Importă automat rezervările din platformele mari, evită suprarezervările (overbooking).</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">👥</div>
+          <h3>Echipă</h3>
+          <p>Invită recepționeri cu acces limitat, fără să le dai controlul complet asupra contului.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">💬</div>
+          <h3>Mesaje WhatsApp</h3>
+          <p>Șabloane gata pregătite pentru confirmare, check-in, recenzii — un click și trimiți.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">📋</div>
+          <h3>Fișă de sosire conformă</h3>
+          <p>Generează automat fișa legală de anunțare a turiștilor, gata de printat.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">🌐</div>
+          <h3>Pagină de rezervare online</h3>
+          <p>Clienții tăi pot rezerva direct de pe un link, fără telefon, fără mesaje pierdute.</p>
+        </div>
       </div>
-      <div style="padding:20px;overflow-y:auto;font-size:13.5px;line-height:1.6;color:#374151;">
-        <p><strong>1. Obiectul contractului</strong><br>Rezervio este o platforma software-as-a-service (SaaS) pentru gestiunea rezervarilor in structuri de primire turistica mici (pensiuni). Prin crearea unui cont, utilizatorul (denumit in continuare "Client") accepta acesti termeni.</p>
-        <p><strong>2. Planuri si abonament</strong><br>Rezervio ofera 3 planuri (Basic, Standard, Premium), cu limite diferite de functionalitati si numar de conturi utilizator. Perioada initiala de 30 de zile este gratuita ("perioada de proba"). Dupa expirarea acesteia, continuarea folosirii aplicatiei necesita plata abonamentului conform planului ales, achitat prin transfer bancar sau alta metoda comunicata de operator.</p>
-        <p><strong>3. Raspunderea Clientului</strong><br>Clientul este singurul raspunzator de acuratetea datelor introduse (rezervari, date turisti, preturi). Rezervio nu isi asuma raspunderea pentru erori de tarifare, suprarezervari (overbooking) sau pierderi financiare rezultate din folosirea incorecta a aplicatiei.</p>
-        <p><strong>4. Disponibilitate si mentenanta</strong><br>Operatorul depune eforturi rezonabile pentru mentinerea disponibilitatii serviciului, dar nu garanteaza functionare neintrerupta 100%. Intreruperi pot aparea pentru mentenanta sau din cauza furnizorilor tehnici (Firebase/Google Cloud).</p>
-        <p><strong>5. Incetarea contului</strong><br>Clientul poate solicita oricand stergerea contului si a datelor asociate. Operatorul poate suspenda conturi cu plati restante sau folosire abuziva, cu notificare prealabila.</p>
-        <p><strong>6. Modificari</strong><br>Acesti termeni pot fi actualizati periodic. Continuarea folosirii aplicatiei dupa o modificare reprezinta acceptarea noilor termeni.</p>
-        <p style="color:#94a3b8;font-size:12px;margin-top:16px;">Ultima actualizare: August 2026. Pentru intrebari: foloseste optiunea "Contact suport" din aplicatie.</p>
+    </div>
+  </section>
+
+  <section class="pricing-bg">
+    <div class="wrap">
+      <div class="section-title">Prețuri simple, fără costuri ascunse</div>
+      <div class="section-sub">30 de zile gratuite pe orice plan. Anulezi oricând.</div>
+      <div class="plans">
+        <div class="plan">
+          <h3>Basic</h3>
+          <div class="plan-price">49 lei<span> /lună</span></div>
+          <div class="plan-desc">Pentru gestiune internă simplă</div>
+          <ul>
+            <li>Calendar și rezervări nelimitate</li>
+            <li>Gestiune camere și surse</li>
+            <li>Statistici și istoric</li>
+            <li>1 cont utilizator</li>
+          </ul>
+          <a href="app.html" class="btn btn-secondary" style="background:#f1f5f9;color:#1e3a5f;">Începe gratuit</a>
+        </div>
+        <div class="plan featured">
+          <div class="plan-badge">CEL MAI POPULAR</div>
+          <h3>Standard</h3>
+          <div class="plan-price">99 lei<span> /lună</span></div>
+          <div class="plan-desc">Pentru prezență online completă</div>
+          <ul>
+            <li>Tot ce e în Basic</li>
+            <li>Pagină publică de rezervare online</li>
+            <li>Sincronizare iCal Booking/Airbnb</li>
+            <li>Până la 3 conturi utilizator</li>
+          </ul>
+          <a href="app.html" class="btn btn-primary" style="background:#2563eb;color:#fff;">Începe gratuit</a>
+        </div>
+        <div class="plan">
+          <h3>Premium</h3>
+          <div class="plan-price">189 lei<span> /lună</span></div>
+          <div class="plan-desc">Pentru echipe mai mari</div>
+          <ul>
+            <li>Tot ce e în Standard</li>
+            <li>Până la 10 conturi utilizator</li>
+            <li>Suport prioritar</li>
+          </ul>
+          <a href="app.html" class="btn btn-secondary" style="background:#f1f5f9;color:#1e3a5f;">Începe gratuit</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="section-title">Întrebări frecvente</div>
+      <div class="faq-item">
+        <h4>Trebuie card bancar pentru trial?</h4>
+        <p>Nu. Te înregistrezi cu email și parolă, ai 30 de zile gratuite pe orice plan.</p>
+      </div>
+      <div class="faq-item">
+        <h4>Cum plătesc după perioada gratuită?</h4>
+        <p>Prin transfer bancar direct — nu ai nevoie de card, nu există comisioane ascunse. Îți trimitem detaliile de plată.</p>
+      </div>
+      <div class="faq-item">
+        <h4>Pot schimba planul mai târziu?</h4>
+        <p>Da, oricând — contactează-ne prin chatul din aplicație și facem schimbarea.</p>
+      </div>
+      <div class="faq-item">
+        <h4>Datele mele sunt în siguranță?</h4>
+        <p>Da — folosim infrastructura Google Firebase, cu acces restricționat pe roluri. Vezi <a onclick="document.getElementById('privacy-modal').style.display='flex'">Politica de Confidențialitate</a> pentru detalii.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div>© 2026 Rezervio. Toate drepturile rezervate.</div>
+    <div style="margin-top:8px;">
+      <a onclick="document.getElementById('terms-modal').style.display='flex'">Termeni și Condiții</a>
+      &nbsp;·&nbsp;
+      <a onclick="document.getElementById('privacy-modal').style.display='flex'">Politica de Confidențialitate</a>
+    </div>
+  </footer>
+
+  <div id="terms-modal" class="modal-ov">
+    <div class="modal-box">
+      <div class="modal-hdr">
+        <strong style="font-size:17px;">Termeni și Condiții</strong>
+        <button onclick="document.getElementById('terms-modal').style.display='none'" style="background:none;border:none;font-size:20px;cursor:pointer;color:#64748b;">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p><strong>1. Obiectul contractului</strong><br>Rezervio este o platformă software-as-a-service (SaaS) pentru gestiunea rezervărilor în structuri de primire turistică mici (pensiuni).</p>
+        <p><strong>2. Planuri și abonament</strong><br>Rezervio oferă 3 planuri (Basic, Standard, Premium). Perioada inițială de 30 de zile este gratuită. După expirare, continuarea folosirii necesită plata abonamentului conform planului ales.</p>
+        <p><strong>3. Răspunderea Clientului</strong><br>Clientul este singurul răspunzător de acuratețea datelor introduse (rezervări, date turiști, prețuri).</p>
+        <p><strong>4. Disponibilitate</strong><br>Operatorul depune eforturi rezonabile pentru disponibilitate, dar nu garantează funcționare neîntreruptă 100%.</p>
+        <p><strong>5. Încetarea contului</strong><br>Clientul poate solicita oricând ștergerea contului și a datelor asociate.</p>
+        <p style="color:#94a3b8;font-size:12px;">Ultima actualizare: August 2026.</p>
       </div>
     </div>
   </div>
 
-  <!-- MODAL POLITICA DE CONFIDENTIALITATE -->
-  <div id="privacy-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;align-items:center;justify-content:center;padding:20px;">
-    <div style="background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:80vh;display:flex;flex-direction:column;">
-      <div style="padding:18px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;">
-        <strong style="font-size:17px;">Politica de Confidentialitate</strong>
-        <button id="close-privacy" style="background:none;border:none;font-size:20px;cursor:pointer;color:#64748b;">&times;</button>
+  <div id="privacy-modal" class="modal-ov">
+    <div class="modal-box">
+      <div class="modal-hdr">
+        <strong style="font-size:17px;">Politica de Confidențialitate</strong>
+        <button onclick="document.getElementById('privacy-modal').style.display='none'" style="background:none;border:none;font-size:20px;cursor:pointer;color:#64748b;">&times;</button>
       </div>
-      <div style="padding:20px;overflow-y:auto;font-size:13.5px;line-height:1.6;color:#374151;">
-        <p><strong>1. Ce date colectam</strong><br>Colectam: email si parola (autentificare), numele pensiunii si datele de contact ale acesteia, date de facturare (nume/CUI/CNP daca sunt introduse voluntar), si datele rezervarilor introduse de Client (nume oaspeti, telefoane, date de sejur).</p>
-        <p><strong>2. Scopul colectarii</strong><br>Datele sunt folosite exclusiv pentru functionarea aplicatiei: autentificare, gestiunea rezervarilor, comunicare cu Clientul privind contul si facturarea. Nu vindem si nu inchiriem datele catre terti.</p>
-        <p><strong>3. Stocare si securitate</strong><br>Datele sunt stocate pe infrastructura Firebase (Google Cloud), cu reguli de acces restrictionate pe rol (Owner, Staff, Administrator retea). Fiecare Client are acces doar la datele propriei pensiuni.</p>
-        <p><strong>4. Datele turistilor introduse de Client</strong><br>Clientul este operator de date pentru informatiile despre proprii oaspeti (fisa de sosire etc.), introduse conform obligatiilor legale (H.G. 237/2001). Rezervio actioneaza ca persoana imputernicita (procesator de date) in acest caz.</p>
-        <p><strong>5. Drepturile Clientului (GDPR)</strong><br>Ai dreptul de acces, rectificare, stergere si portabilitate a datelor tale. Poti solicita oricand exportul sau stergerea completa a contului, contactand suportul din aplicatie.</p>
-        <p><strong>6. Cookie-uri si stocare locala</strong><br>Aplicatia foloseste localStorage pentru a pastra sesiunea de autentificare si preferinte locale (nu cookie-uri de tracking/publicitate).</p>
-        <p style="color:#94a3b8;font-size:12px;margin-top:16px;">Ultima actualizare: August 2026. Pentru cereri privind datele tale personale, foloseste optiunea "Contact suport" din aplicatie.</p>
+      <div class="modal-body">
+        <p><strong>1. Ce date colectăm</strong><br>Email și parolă, numele pensiunii, date de facturare (dacă sunt introduse), și datele rezervărilor introduse de Client.</p>
+        <p><strong>2. Scopul colectării</strong><br>Exclusiv pentru funcționarea aplicației. Nu vindem și nu închiriem datele către terți.</p>
+        <p><strong>3. Stocare și securitate</strong><br>Datele sunt stocate pe infrastructura Firebase (Google Cloud), cu acces restricționat pe rol.</p>
+        <p><strong>4. Drepturile tale (GDPR)</strong><br>Ai dreptul de acces, rectificare, ștergere și portabilitate a datelor. Contactează suportul din aplicație pentru orice cerere.</p>
+        <p style="color:#94a3b8;font-size:12px;">Ultima actualizare: August 2026.</p>
       </div>
     </div>
   </div>
 
-  <!-- APP (afisat dupa login) -->
-  <div id="root" style="display:none;"></div>
-
-  <!-- REACT CDN -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-
-  <!-- FIREBASE CDN (COMPAT VERSION — necesar pentru firebase.initializeApp() syntax) -->
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
-
-  <!-- APP SCRIPTS (in order) -->
-  <script src="js/config.js"></script>
-  <script src="js/helpers.js"></script>
-  <script src="js/icons.js"></script>
-  <script src="js/templates.js"></script>
-  <script src="js/app.js"></script>
-
-  <!-- SERVICE WORKER (PWA) -->
   <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js').catch(function(err) { console.log('SW register failed:', err); });
-    }
-  </script>
-
-  <!-- FIREBASE INIT + AUTH UI (first script block) -->
-  <script>
-    (function() {
-      var fbAuth = null;
-      var ls = document.getElementById('login-screen');
-      var root = document.getElementById('root');
-      var appStarted = false;
-
-      // Firebase initialization
-      firebase.initializeApp(firebaseConfig);
-      fbAuth = firebase.auth();
-      firebaseAuth = fbAuth;
-      firebaseDB = firebase.database();
-
-      // ── FORMULAR LOGIN / INSCRIERE PROPRIU (fara FirebaseUI) ──────────────────
-      var tabLogin = document.getElementById('tab-login');
-      var tabSignup = document.getElementById('tab-signup');
-      var loginForm = document.getElementById('login-form');
-      var signupForm = document.getElementById('signup-form');
-      var loginError = document.getElementById('login-error');
-      var signupError = document.getElementById('signup-error');
-      var loginSubmit = document.getElementById('login-submit');
-      var signupSubmit = document.getElementById('signup-submit');
-      var forgotPasswordLink = document.getElementById('forgot-password');
-
-      tabLogin.addEventListener('click', function() {
-        tabLogin.className = 'auth-tab active';
-        tabSignup.className = 'auth-tab';
-        loginForm.style.display = 'block';
-        signupForm.style.display = 'none';
-        loginError.style.display = 'none';
-      });
-      tabSignup.addEventListener('click', function() {
-        tabSignup.className = 'auth-tab active';
-        tabLogin.className = 'auth-tab';
-        signupForm.style.display = 'block';
-        loginForm.style.display = 'none';
-        signupError.style.display = 'none';
-      });
-
-      // Traduce codurile de eroare Firebase in mesaje intelegibile in romana
-      function authErrMsg(code) {
-        var msgs = {
-          'auth/invalid-email': 'Adresa de email nu este valida.',
-          'auth/user-disabled': 'Acest cont a fost dezactivat.',
-          'auth/user-not-found': 'Nu exista niciun cont cu acest email. Incearca "Inscrie-te".',
-          'auth/wrong-password': 'Parola este gresita.',
-          'auth/invalid-credential': 'Email sau parola incorecte.',
-          'auth/email-already-in-use': 'Exista deja un cont cu acest email. Incearca "Logheaza-te".',
-          'auth/weak-password': 'Parola trebuie sa aiba minim 6 caractere.',
-          'auth/too-many-requests': 'Prea multe incercari. Asteapta cateva minute si incearca din nou.',
-          'auth/network-request-failed': 'Eroare de conexiune. Verifica internetul si incearca din nou.'
-        };
-        return msgs[code] || 'A aparut o eroare. Incearca din nou.';
-      }
-
-      function showError(el, msg) { el.textContent = msg; el.style.display = 'block'; }
-      function hideError(el) { el.style.display = 'none'; }
-
-      loginForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-        hideError(loginError);
-        var email = document.getElementById('login-email').value.trim();
-        var pass = document.getElementById('login-password').value;
-        loginSubmit.disabled = true;
-        loginSubmit.textContent = 'Se conecteaza...';
-        fbAuth.signInWithEmailAndPassword(email, pass)
-          .catch(function(err) { showError(loginError, authErrMsg(err.code)); })
-          .then(function() {
-            loginSubmit.disabled = false;
-            loginSubmit.textContent = 'Intra in cont';
-          });
-      });
-
-      signupForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-        hideError(signupError);
-        var email = document.getElementById('signup-email').value.trim();
-        var pass = document.getElementById('signup-password').value;
-        if (pass.length < 6) { showError(signupError, 'Parola trebuie sa aiba minim 6 caractere.'); return; }
-        if (!termsCheckbox.checked) { showError(signupError, 'Trebuie sa accepti Termenii si Politica de Confidentialitate.'); return; }
-        signupSubmit.disabled = true;
-        signupSubmit.textContent = 'Se creeaza contul...';
-        window.PENDING_TERMS_ACCEPTED_AT = Date.now(); // citit la crearea inregistrarii users/{uid}
-        fbAuth.createUserWithEmailAndPassword(email, pass)
-          .catch(function(err) { showError(signupError, authErrMsg(err.code)); })
-          .then(function() {
-            signupSubmit.disabled = false;
-            signupSubmit.textContent = 'Creeaza cont';
-          });
-      });
-
-      // Checkbox Termeni — activeaza butonul de creare cont doar dupa bifare
-      var termsCheckbox = document.getElementById('terms-checkbox');
-      termsCheckbox.addEventListener('change', function() {
-        signupSubmit.disabled = !termsCheckbox.checked;
-        signupSubmit.style.opacity = termsCheckbox.checked ? '1' : '.5';
-      });
-
-      // Modale Termeni / Confidentialitate — deschidere/inchidere
-      var termsModal = document.getElementById('terms-modal');
-      var privacyModal = document.getElementById('privacy-modal');
-      document.getElementById('open-terms').addEventListener('click', function(e) { e.preventDefault(); termsModal.style.display = 'flex'; });
-      document.getElementById('open-privacy').addEventListener('click', function(e) { e.preventDefault(); privacyModal.style.display = 'flex'; });
-      document.getElementById('close-terms').addEventListener('click', function() { termsModal.style.display = 'none'; });
-      document.getElementById('close-privacy').addEventListener('click', function() { privacyModal.style.display = 'none'; });
-      termsModal.addEventListener('click', function(e) { if (e.target === termsModal) termsModal.style.display = 'none'; });
-      privacyModal.addEventListener('click', function(e) { if (e.target === privacyModal) privacyModal.style.display = 'none'; });
-
-      forgotPasswordLink.addEventListener('click', function(e) {
-        e.preventDefault();
-        var email = document.getElementById('login-email').value.trim();
-        if (!email) { showError(loginError, 'Introdu email-ul mai sus, apoi apasa din nou "Am uitat parola".'); return; }
-        fbAuth.sendPasswordResetEmail(email)
-          .then(function() { showError(loginError, 'Ti-am trimis un email cu instructiuni de resetare a parolei.'); loginError.style.color = '#16a34a'; })
-          .catch(function(err) { loginError.style.color = '#dc2626'; showError(loginError, authErrMsg(err.code)); });
-      });
-
-      // Auth state listener
-      // Creeaza o pensiune noua pentru un user autentificat fara inregistrare in DB —
-      // fie e cont chiar nou, fie e un cont ale carui date au fost redate "curate" dupa
-      // ce vechea pensiune a fost stearsa (dar email-ul NU e in lista neagra).
-      // IMPORTANT: scrierile trebuie facute SECVENTIAL (users/ intai, apoi pensions/), nu in
-      // paralel — regulile Firebase verifica users/{uid}/pensionId pentru a permite crearea
-      // pensiunii, deci acel camp trebuie sa existe deja scris. La fel de important: startApp()
-      // NU porneste decat DUPA ce tot lantul de scrieri s-a confirmat — altfel App incepe sa
-      // citeasca pensions/{id} inainte ca users/{uid}/pensionId sa fie efectiv confirmat in
-      // Firebase, iar regula de citire il respinge cu PERMISSION_DENIED (conditie de cursa reala).
-      function createNewPensionForUser(user) {
-        var newPensionId = 'p_' + user.uid.slice(0, 8);
-        var trialEnds = Date.now() + 30 * 24 * 60 * 60 * 1000;
-        firebaseDB.ref('users/' + user.uid).set({
-          email: user.email,
-          role: 'owner',
-          pensionId: newPensionId,
-          createdAt: Date.now(),
-          termsAcceptedAt: window.PENDING_TERMS_ACCEPTED_AT || Date.now()
-        }).then(function() {
-          return firebaseDB.ref('pensions/' + newPensionId).set({
-            ownerUid: user.uid,
-            ownerEmail: user.email,
-            pensionName: 'Pensiunea Mea',
-            plan: 'basic',
-            status: 'active',
-            accountCount: 1,
-            trialEndsAt: trialEnds,
-            createdAt: Date.now()
-          });
-        }).then(function() {
-          return firebaseDB.ref('pensions/' + newPensionId + '/members/' + user.uid).set({
-            email: user.email, role: 'owner', addedAt: Date.now()
-          });
-        }).then(function() {
-          PENSION_ID = newPensionId;
-          USER_ROLE = 'owner';
-          ls.style.display = 'none';
-          root.style.display = 'block';
-          tryStartApp();
-        }).catch(function(err) {
-          console.error('Eroare la initializarea contului nou:', err);
-          alert('A aparut o eroare la crearea contului. Reincarca pagina si incearca din nou. Detalii: ' + err.message);
-        });
-      }
-
-      function initFirebaseAndAuthUI() {
-        fbAuth.onAuthStateChanged(function(user) {
-          if (user) {
-            firebaseDB.ref('users/' + user.uid).once('value')
-              .then(function(snap) {
-                var data = snap.val();
-                if (!data) {
-                  // Utilizator nou (SAU cont ale carui date au fost sterse de un Administrator
-                  // retea — vezi mai jos verificarea listei negre). Inainte de a crea automat o
-                  // pensiune noua, verificam daca acest email a fost blocat explicit.
-                  firebaseDB.ref('bannedEmails/' + sanitizeEmailKey(user.email)).once('value').then(function(banSnap) {
-                    if (banSnap.exists()) {
-                      alert('Acest cont a fost dezactivat. Contacteaza suportul pentru detalii.');
-                      firebase.auth().signOut();
-                      return;
-                    }
-                    createNewPensionForUser(user);
-                  }).catch(function(err) {
-                    console.error('Eroare la verificarea listei negre:', err);
-                    alert('A aparut o eroare. Reincarca pagina si incearca din nou.');
-                  });
-                } else {
-                  USER_ROLE = data.role || 'owner';
-                  PENSION_ID = data.pensionId || null;
-                  ls.style.display = 'none';
-                  root.style.display = 'block';
-                  tryStartApp();
-                }
-              })
-              .catch(function() {
-                PENSION_ID = 'p_' + user.uid.slice(0, 8);
-                USER_ROLE = 'owner';
-                ls.style.display = 'none';
-                root.style.display = 'block';
-                tryStartApp();
-              });
-          } else {
-            var wasRunning = appStarted;
-            PENSION_ID = null;
-            USER_ROLE = null;
-            ls.style.display = 'flex';
-            root.style.display = 'none';
-            if (wasRunning) {
-              setTimeout(function() { window.location.reload(); }, 300);
-            }
-          }
-        });
-      }
-
-      function tryStartApp() {
-        if (appStarted) return;
-        if (typeof window.startApp !== 'function') {
-          setTimeout(tryStartApp, 50);
-          return;
-        }
-        appStarted = true;
-        window.startApp();
-      }
-
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initFirebaseAndAuthUI);
-      } else {
-        initFirebaseAndAuthUI();
-      }
-    })();
+    document.querySelectorAll('.modal-ov').forEach(function(m) {
+      m.addEventListener('click', function(e) { if (e.target === m) m.style.display = 'none'; });
+    });
   </script>
 </body>
 </html>
