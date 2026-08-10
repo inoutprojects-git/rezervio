@@ -39,6 +39,8 @@ function App() {
   var pmb = useState({}); var members = pmb[0], setMembers = pmb[1];
   var stm = useState(false); var showTeam = stm[0], setShowTeam = stm[1];
   var sgd = useState(false); var showGuide = sgd[0], setShowGuide = sgd[1];
+  var ssc = useState(false); var showSupportChat = ssc[0], setShowSupportChat = ssc[1];
+  var hus = useState(false); var hasUnreadSupport = hus[0], setHasUnreadSupport = hus[1];
   var afs = useState('future'); var activeFilter = afs[0], setActiveFilter = afs[1];
   var brs = useState(function() { return lc.get('p_bookrules', { minGapDays: 0, minNights: 0, minAdvanceDays: 0 }); }); var bookingRules = brs[0], setBookingRules = brs[1];
   var sbr = useState(false); var showBookingRules = sbr[0], setShowBookingRules = sbr[1];
@@ -76,11 +78,19 @@ function App() {
     var u5 = fb.on('accountCount', function(v) { if (v) setAccountCount(v); });
     var u6 = fb.on('members', function(v) { setMembers(v || {}); });
     var u7 = fb.on('trialEndsAt', function(v) { setTrialEndsAt(v || null); });
+    var u8 = fb.on('supportChat/messages', function(data) {
+      if (!data || !PENSION_ID) { setHasUnreadSupport(false); return; }
+      var arr = Object.values(data);
+      arr.sort(function(a, b) { return (a.timestamp || 0) - (b.timestamp || 0); });
+      var last = arr[arr.length - 1];
+      var lastSeen = lc.get('p_lastSeenSupport_' + PENSION_ID, 0);
+      setHasUnreadSupport(!!last && last.senderRole === 'network_admin' && last.timestamp > lastSeen);
+    });
     firebaseDB.ref('.info/connected').on('value', function(snap) {
       if (snap.val() === false) { setSync('offline'); setRes(lc.get('p_res', [])); setLoading(false); }
       else setSync('online');
     });
-    return function() { u1(); u2(); u3(); u4(); u5(); u6(); u7(); };
+    return function() { u1(); u2(); u3(); u4(); u5(); u6(); u7(); u8(); };
   }, []);
 
   // Date de facturare: legate de USER (cont), nu de pensiune — separat de fb.on() de mai sus,
@@ -323,12 +333,18 @@ function App() {
   // (trialEndsAt nu a fost extins). Blocheaza accesul, dar cu mesaj diferit de suspendare —
   // aici nu e o penalizare, doar un memento ca abonamentul trebuie activat.
   if (trialEndsAt && trialEndsAt < Date.now()) {
-    return h('div', { className: 'ldg' },
-      h('div', { style: { fontSize: 48 } }, '\u23F3'),
-      h('div', { style: { fontSize: 18, fontWeight: 800, color: '#1a202c' } }, 'Perioada gratuita a expirat'),
-      h('div', { style: { fontSize: 14, color: '#64748b', textAlign: 'center', maxWidth: 320 } }, 'Cele 30 de zile de proba s-au incheiat. Contacteaza-ne pentru a activa abonamentul si a continua sa folosesti Rezervio.'),
-      h('a', { href: waUrl(SUPPORT_PHONE), target: '_blank', rel: 'noopener', style: { marginTop: 4, padding: '12px 22px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8 } }, '\uD83D\uDCAC Contacteaza suport'),
-      h('button', { style: { marginTop: 4, padding: '10px 20px', background: '#f1f5f9', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer' }, onClick: function() { firebase.auth().signOut(); } }, 'Deconectare')
+    return h(Fragment, null,
+      h('div', { className: 'ldg' },
+        h('div', { style: { fontSize: 48 } }, '\u23F3'),
+        h('div', { style: { fontSize: 18, fontWeight: 800, color: '#1a202c' } }, 'Perioada gratuita a expirat'),
+        h('div', { style: { fontSize: 14, color: '#64748b', textAlign: 'center', maxWidth: 320 } }, 'Cele 30 de zile de proba s-au incheiat. Contacteaza-ne pentru a activa abonamentul si a continua sa folosesti Rezervio.'),
+        h('button', { style: { marginTop: 4, padding: '12px 22px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }, onClick: function() { setShowSupportChat(true); } }, '\uD83D\uDCAC Contacteaza suport'),
+        h('button', { style: { marginTop: 4, padding: '10px 20px', background: '#f1f5f9', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer' }, onClick: function() { firebase.auth().signOut(); } }, 'Deconectare')
+      ),
+      showSupportChat && h(SupportChat, {
+        pensionId: PENSION_ID, viewerRole: USER_ROLE, viewerEmail: firebase.auth().currentUser ? firebase.auth().currentUser.email : '',
+        onClose: function() { setShowSupportChat(false); }
+      })
     );
   }
 
@@ -381,6 +397,8 @@ function App() {
       userRole: USER_ROLE, plan: plan, accountCount: accountCount,
       onOpenTeam: function() { setShowTeam(true); },
       onOpenGuide: function() { setShowGuide(true); },
+      onOpenSupportChat: function() { setShowSupportChat(true); lc.set('p_lastSeenSupport_' + PENSION_ID, Date.now()); setHasUnreadSupport(false); },
+      hasUnreadSupport: hasUnreadSupport,
       onClose: function() { setDrawerOpen(false); }
     }),
     // PENDING BANNER
@@ -475,6 +493,10 @@ function App() {
       pensionName: pensionName, rooms: rooms, sources: sources, reservations: reservations, billingInfo: billingInfo,
       onClose: function() { setShowGuide(false); }
     }),
+    showSupportChat && h(SupportChat, {
+      pensionId: PENSION_ID, viewerRole: USER_ROLE, viewerEmail: firebase.auth().currentUser ? firebase.auth().currentUser.email : '',
+      onClose: function() { setShowSupportChat(false); }
+    }),
     confirm && h(Confirm, { msg: confirm.msg, okLbl: confirm.okLbl, ok: confirm.ok, onCancel: function() { setConfirm(null); } })
   );
 }
@@ -488,6 +510,34 @@ function NetworkAdminDashboard() {
   var ls = useState(true); var loading = ls[0], setLoading = ls[1];
   var ps = useState([]); var pensionsList = ps[0], setPensionsList = ps[1];
   var bp = useState({}); var busy = bp[0], setBusy = bp[1]; // { [pensionId]: true } cat timp o actiune e in curs
+  var dts = useState(null); var deleteTarget = dts[0], setDeleteTarget = dts[1];
+  var atb = useState('pensions'); var activeTab = atb[0], setActiveTab = atb[1]; // 'pensions' | 'support'
+  var scp = useState(null); var chatPension = scp[0], setChatPension = scp[1];
+
+  // Inbox de suport, derivat direct din pensionsList (care contine deja supportChat, fiind
+  // citit integral din /pensions). Sortat pe prioritate: conversatii care asteapta raspuns
+  // primele, ordonate dupa plan (Premium > Standard > Basic), apoi cele mai vechi in asteptare.
+  var supportThreads = useMemo(function() {
+    var planRank = { premium: 3, standard: 2, basic: 1 };
+    var threads = pensionsList.map(function(p) {
+      var msgs = (p.supportChat && p.supportChat.messages) ? Object.values(p.supportChat.messages) : [];
+      msgs.sort(function(a, b) { return (a.timestamp || 0) - (b.timestamp || 0); });
+      var last = msgs[msgs.length - 1];
+      return { pension: p, messageCount: msgs.length, lastMessage: last, needsReply: !!last && last.senderRole !== 'network_admin' };
+    }).filter(function(t) { return t.messageCount > 0; });
+
+    threads.sort(function(a, b) {
+      if (a.needsReply !== b.needsReply) return a.needsReply ? -1 : 1;
+      if (a.needsReply) {
+        var rankDiff = (planRank[b.pension.plan] || 0) - (planRank[a.pension.plan] || 0);
+        if (rankDiff !== 0) return rankDiff;
+        return (a.lastMessage.timestamp || 0) - (b.lastMessage.timestamp || 0);
+      }
+      return (b.lastMessage.timestamp || 0) - (a.lastMessage.timestamp || 0);
+    });
+    return threads;
+  }, [pensionsList]);
+  var needsReplyCount = supportThreads.filter(function(t) { return t.needsReply; }).length;
 
   useEffect(function() {
     if (!firebaseDB) { setLoading(false); return; }
@@ -541,6 +591,28 @@ function NetworkAdminDashboard() {
       .then(function() { setBusyFor(id, false); });
   }
 
+  // Stergere completa (Varianta 2): sterge toate inregistrarile users/{uid} ale membrilor
+  // (Owner + Staff), adauga email-ul Owner-ului in lista neagra (bannedEmails) ca sa nu
+  // poata recrea automat un cont nou gratuit, apoi sterge intreaga pensiune. Contul de
+  // AUTENTIFICARE Firebase (email+parola) ramane tehnic valid — Firebase nu permite
+  // stergerea lui de catre altcineva decat proprietarul sau printr-un backend cu Admin SDK
+  // (in afara arhitecturii curente). Blocarea reala se face prin lista neagra.
+  function deletePensionCompletely(p) {
+    setBusyFor(p.id, true);
+    var memberUids = Object.keys(p.members || {});
+    Promise.all(memberUids.map(function(uid) { return firebaseDB.ref('users/' + uid).remove(); }))
+      .then(function() {
+        if (p.ownerEmail) {
+          return firebaseDB.ref('bannedEmails/' + sanitizeEmailKey(p.ownerEmail)).set({
+            bannedAt: Date.now(), pensionName: p.pensionName || ''
+          });
+        }
+      })
+      .then(function() { return firebaseDB.ref('pensions/' + p.id).remove(); })
+      .then(function() { setBusyFor(p.id, false); setDeleteTarget(null); })
+      .catch(function(err) { alert('Eroare la stergere: ' + err.message); setBusyFor(p.id, false); });
+  }
+
   if (loading) {
     return h('div', { className: 'ldg' },
       h('div', { className: 'spin' }),
@@ -550,15 +622,27 @@ function NetworkAdminDashboard() {
 
   return h('div', { className: 'app' },
     h('header', { style: { background: 'linear-gradient(135deg,#1e3a5f,#1d4ed8)', color: '#fff', padding: '16px', position: 'sticky', top: 0, zIndex: 60, boxShadow: '0 2px 16px rgba(0,0,0,.22)' } },
-      h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: 900, margin: '0 auto' } },
+      h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', maxWidth: 900, margin: '0 auto', flexWrap: 'wrap', gap: 10 } },
         h('div', null,
           h('div', { style: { fontSize: 19, fontWeight: 800 } }, '\uD83D\uDEE1\uFE0F Administrator retea'),
           h('div', { style: { fontSize: 13, opacity: .8, marginTop: 2 } }, pensionsList.length + ' pensiuni inregistrate')
         ),
-        h('button', { style: { padding: '9px 16px', background: 'rgba(255,255,255,.15)', border: '1.5px solid rgba(255,255,255,.25)', color: '#fff', borderRadius: 9, fontWeight: 700, cursor: 'pointer' }, onClick: function() { firebase.auth().signOut(); } }, 'Deconectare')
+        h('div', { style: { display: 'flex', gap: 8, alignItems: 'center' } },
+          h('div', { style: { display: 'flex', background: 'rgba(255,255,255,.12)', borderRadius: 10, padding: 3, gap: 2 } },
+            h('button', {
+              style: { padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', background: activeTab === 'pensions' ? '#fff' : 'none', color: activeTab === 'pensions' ? '#1e3a5f' : '#fff' },
+              onClick: function() { setActiveTab('pensions'); }
+            }, 'Pensiuni'),
+            h('button', {
+              style: { padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', background: activeTab === 'support' ? '#fff' : 'none', color: activeTab === 'support' ? '#1e3a5f' : '#fff', display: 'flex', alignItems: 'center', gap: 6 },
+              onClick: function() { setActiveTab('support'); }
+            }, '\uD83D\uDCAC Suport', needsReplyCount > 0 && h('span', { style: { background: '#dc2626', color: '#fff', borderRadius: 10, padding: '1px 7px', fontSize: 11 } }, needsReplyCount))
+          ),
+          h('button', { style: { padding: '9px 16px', background: 'rgba(255,255,255,.15)', border: '1.5px solid rgba(255,255,255,.25)', color: '#fff', borderRadius: 9, fontWeight: 700, cursor: 'pointer' }, onClick: function() { firebase.auth().signOut(); } }, 'Deconectare')
+        )
       )
     ),
-    h('div', { className: 'page', style: { maxWidth: 900 } },
+    activeTab === 'pensions' && h('div', { className: 'page', style: { maxWidth: 900 } },
       pensionsList.length === 0
         ? h('div', { style: { textAlign: 'center', padding: '40px 20px', color: '#94a3b8' } }, 'Nicio pensiune inregistrata inca.')
         : pensionsList.map(function(p) {
@@ -615,11 +699,58 @@ function NetworkAdminDashboard() {
                 h('button', {
                   style: { padding: '8px 14px', background: '#dcfce7', color: '#15803d', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' },
                   disabled: isBusy, onClick: function() { confirmPayment(p.id); }
-                }, '\u2713 Confirma plata (+30 zile)')
+                }, '\u2713 Confirma plata (+30 zile)'),
+                h('button', {
+                  style: { padding: '8px 14px', background: '#fef2f2', color: '#dc2626', border: '1.5px solid #fecaca', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer' },
+                  disabled: isBusy, onClick: function() { setDeleteTarget(p); }
+                }, '\uD83D\uDDD1\uFE0F Sterge complet')
               )
             );
           })
-    )
+    ),
+
+    activeTab === 'support' && h('div', { className: 'page', style: { maxWidth: 900 } },
+      supportThreads.length === 0
+        ? h('div', { style: { textAlign: 'center', padding: '40px 20px', color: '#94a3b8' } }, 'Nicio conversatie de suport inca.')
+        : supportThreads.map(function(t) {
+            var p = t.pension;
+            var planBadgeColor = { premium: '#7c3aed', standard: '#2563eb', basic: '#64748b' }[p.plan] || '#64748b';
+            return h('div', {
+              key: p.id, className: 'card',
+              style: { padding: 14, cursor: 'pointer', border: t.needsReply ? '1.5px solid #dc2626' : '1.5px solid transparent' },
+              onClick: function() { setChatPension(p); }
+            },
+              h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 } },
+                h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 } },
+                  h('span', { style: { fontWeight: 800, fontSize: 15, color: '#1a202c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, p.pensionName || '(fara nume)'),
+                  h('span', { style: { fontSize: 10.5, fontWeight: 800, color: '#fff', background: planBadgeColor, padding: '2px 8px', borderRadius: 10, flexShrink: 0 } }, (PLAN_LABELS[p.plan] || p.plan || '').toUpperCase())
+                ),
+                t.needsReply
+                  ? h('span', { style: { fontSize: 11, fontWeight: 800, color: '#dc2626', flexShrink: 0 } }, '\u25CF Asteapta raspuns')
+                  : h('span', { style: { fontSize: 11, fontWeight: 700, color: '#16a34a', flexShrink: 0 } }, '\u2713 Raspuns trimis')
+              ),
+              h('div', { style: { fontSize: 13, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
+                (t.lastMessage.senderRole === 'network_admin' ? 'Tu: ' : '') + t.lastMessage.text
+              ),
+              h('div', { style: { fontSize: 11, color: '#cbd5e1', marginTop: 4 } },
+                new Date(t.lastMessage.timestamp).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+              )
+            );
+          })
+    ),
+
+    deleteTarget && h(Confirm, {
+      msg: 'Stergi COMPLET pensiunea "' + (deleteTarget.pensionName || '(fara nume)') + '"? Toate rezervarile, configurarile si conturile asociate (Owner + Staff) vor fi sterse ireversibil, iar email-ul "' + (deleteTarget.ownerEmail || '-') + '" va fi blocat sa mai creeze un cont nou gratuit.',
+      okLbl: 'Sterge definitiv',
+      ok: function() { deletePensionCompletely(deleteTarget); },
+      onCancel: function() { setDeleteTarget(null); }
+    }),
+
+    chatPension && h(SupportChat, {
+      pensionId: chatPension.id, viewerRole: 'network_admin', viewerEmail: firebase.auth().currentUser ? firebase.auth().currentUser.email : '',
+      pensionName: chatPension.pensionName,
+      onClose: function() { setChatPension(null); }
+    })
   );
 }
 
@@ -1038,6 +1169,108 @@ function OnboardingGuide(props) {
       ),
       h('div', { className: 'mfoot' },
         h('button', { className: 'mcanc', onClick: props.onClose }, 'Inchide')
+      )
+    )
+  );
+}
+
+// ── CHAT SUPORT INTERN (Client <-> Network Admin) ────────────────────────────
+// Componenta e reutilizata atat de client (Owner/Staff, scop implicit pe propria pensiune)
+// cat si de Network Admin (poate deschide chat-ul oricarei pensiuni din inbox-ul de suport).
+function SupportChat(props) {
+  var pensionId = props.pensionId;
+  var viewerRole = props.viewerRole; // 'owner' | 'staff' | 'network_admin'
+  var isAdminView = viewerRole === 'network_admin';
+
+  var ms = useState([]); var messages = ms[0], setMessages = ms[1];
+  var txt = useState(''); var text = txt[0], setText = txt[1];
+  var sv = useState(false); var sending = sv[0], setSending = sv[1];
+  var bottomRef = useState(null); var bottomEl = bottomRef[0], setBottomEl = bottomRef[1];
+
+  useEffect(function() {
+    if (!pensionId || !firebaseDB) return;
+    var ref = firebaseDB.ref('pensions/' + pensionId + '/supportChat/messages');
+    var cb = function(snap) {
+      var data = snap.val() || {};
+      var arr = Object.keys(data).map(function(id) { return Object.assign({ id: id }, data[id]); });
+      arr.sort(function(a, b) { return (a.timestamp || 0) - (b.timestamp || 0); });
+      setMessages(arr);
+    };
+    ref.on('value', cb);
+    // Marcheaza local ultimul mesaj vazut, pentru indicatorul de "mesaj nou" din meniu
+    if (!isAdminView) {
+      setTimeout(function() {
+        var last = null;
+        ref.once('value').then(function(snap) {
+          var data = snap.val() || {};
+          var arr = Object.values(data);
+          if (arr.length) { arr.sort(function(a,b){return (a.timestamp||0)-(b.timestamp||0);}); last = arr[arr.length-1]; }
+          lc.set('p_lastSeenSupport_' + pensionId, last ? last.timestamp : Date.now());
+        });
+      }, 800);
+    }
+    return function() { ref.off('value', cb); };
+  }, [pensionId]);
+
+  useEffect(function() {
+    if (bottomEl) bottomEl.scrollIntoView({ behavior: 'smooth' });
+  }, [messages.length]);
+
+  function handleSend() {
+    if (!text.trim() || !pensionId) return;
+    setSending(true);
+    var msg = {
+      text: text.trim(),
+      senderRole: viewerRole,
+      senderEmail: props.viewerEmail || '',
+      timestamp: Date.now()
+    };
+    firebaseDB.ref('pensions/' + pensionId + '/supportChat/messages').push(msg)
+      .then(function() { setText(''); setSending(false); })
+      .catch(function(err) { alert('Eroare la trimitere: ' + err.message); setSending(false); });
+  }
+
+  return h('div', { className: 'ov', onClick: props.onClose },
+    h('div', { className: 'mdl', style: { display: 'flex', flexDirection: 'column', height: '80vh', maxHeight: 600 }, onClick: function(e) { e.stopPropagation(); } },
+      h('div', { className: 'mhdr' },
+        h('span', { className: 'mtit' }, '\uD83D\uDCAC ' + (isAdminView ? ('Chat: ' + (props.pensionName || pensionId)) : 'Chat suport')),
+        h('button', { className: 'mclose', onClick: props.onClose }, '\u2715')
+      ),
+      h('div', { style: { flex: 1, overflowY: 'auto', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10 } },
+        messages.length === 0 && h('div', { style: { textAlign: 'center', color: '#94a3b8', fontSize: 13.5, marginTop: 30 } },
+          isAdminView ? 'Nicio conversatie inca.' : 'Scrie-ne orice intrebare sau problema — iti raspundem cat mai curand.'
+        ),
+        messages.map(function(m) {
+          var isMine = isAdminView ? (m.senderRole === 'network_admin') : (m.senderRole !== 'network_admin');
+          var label = m.senderRole === 'network_admin' ? 'Suport Rezervio' : (m.senderRole === 'owner' ? 'Tu (Owner)' : 'Tu (Staff)');
+          if (isAdminView && m.senderRole !== 'network_admin') label = m.senderEmail || 'Client';
+          return h('div', { key: m.id, style: { alignSelf: isMine ? 'flex-end' : 'flex-start', maxWidth: '78%' } },
+            h('div', { style: { fontSize: 11, color: '#94a3b8', marginBottom: 3, textAlign: isMine ? 'right' : 'left' } }, label),
+            h('div', {
+              style: {
+                padding: '10px 13px', borderRadius: 14,
+                background: isMine ? '#2563eb' : '#f1f5f9',
+                color: isMine ? '#fff' : '#1a202c',
+                fontSize: 14, lineHeight: 1.4, whiteSpace: 'pre-wrap', wordBreak: 'break-word'
+              }
+            }, m.text),
+            h('div', { style: { fontSize: 10, color: '#cbd5e1', marginTop: 3, textAlign: isMine ? 'right' : 'left' } },
+              new Date(m.timestamp).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+            )
+          );
+        }),
+        h('div', { ref: function(el) { if (el && !bottomEl) setBottomEl(el); } })
+      ),
+      h('div', { style: { padding: '12px 14px', borderTop: '1px solid #f1f5f9', display: 'flex', gap: 8 } },
+        h('input', {
+          className: 'finp', style: { flex: 1 }, placeholder: 'Scrie un mesaj...', value: text,
+          onChange: function(e) { setText(e.target.value); },
+          onKeyDown: function(e) { if (e.key === 'Enter') handleSend(); }
+        }),
+        h('button', {
+          style: { padding: '10px 18px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 9, fontWeight: 700, cursor: 'pointer' },
+          disabled: sending || !text.trim(), onClick: handleSend
+        }, '\u27A4')
       )
     )
   );
@@ -2603,9 +2836,12 @@ function Drawer(props) {
             h('span', { style: { fontSize: 15 } }, '\uD83D\uDCD6'),
             h('span', { className: 'dsub-lbl' }, 'Ghid de pornire')
           ),
-          h('a', { href: waUrl(SUPPORT_PHONE), target: '_blank', rel: 'noopener', className: 'dsub-item', style: { textDecoration: 'none', color: 'inherit' } },
-            h('span', { style: { fontSize: 15 } }, '\uD83D\uDCAC'),
-            h('span', { className: 'dsub-lbl' }, 'Contact suport')
+          h('div', { className: 'dsub-item', style: { justifyContent: 'space-between' }, onClick: function() { props.onOpenSupportChat(); props.onClose(); } },
+            h('span', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+              h('span', { style: { fontSize: 15 } }, '\uD83D\uDCAC'),
+              h('span', { className: 'dsub-lbl' }, 'Chat suport')
+            ),
+            props.hasUnreadSupport && h('span', { style: { width: 9, height: 9, borderRadius: '50%', background: '#dc2626', flexShrink: 0 } })
           )
         )
       )

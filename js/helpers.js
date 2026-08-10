@@ -137,5 +137,11 @@ function waUrl(phone) {
 }
 function smsUrl(phone) { return 'sms:' + phone; }
 
+// Firebase RTDB keys nu pot contine '.' — transformam email-ul intr-o cheie valida
+// (pattern comun: inlocuim '.' cu ',' — reversibil, usor de recunoscut la nevoie).
+function sanitizeEmailKey(email) {
+  return (email || '').toLowerCase().replace(/\./g, ',');
+}
+
 // NOTA: isValidCNP si isValidCUI sunt definite in app.js (langa BillingInfo component)
 // pentru a evita duplicarea — acolo e versiunea completa folosita de formular.

@@ -55,10 +55,19 @@
           ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (root.child('users').child(auth.uid).child('pensionId').val() === $pensionId && (root.child('users').child(auth.uid).child('role').val() === 'owner' || root.child('users').child(auth.uid).child('role').val() === 'staff')))"
         },
 
+        "supportChat": {
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (root.child('users').child(auth.uid).child('pensionId').val() === $pensionId && (root.child('users').child(auth.uid).child('role').val() === 'owner' || root.child('users').child(auth.uid).child('role').val() === 'staff')))"
+        },
+
         "$other": {
           ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (root.child('users').child(auth.uid).child('role').val() === 'owner' && root.child('users').child(auth.uid).child('pensionId').val() === $pensionId))"
         }
       }
+    },
+
+    "bannedEmails": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'network_admin'"
     }
   }
 }
