@@ -4,10 +4,17 @@
     ".write": false,
 
     "users": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'network_admin'",
+
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (root.child('users').child(auth.uid).child('role').val() === 'owner' && root.child('users').child(auth.uid).child('pensionId').val() === root.child('users').child($uid).child('pensionId').val()))",
         ".write": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'network_admin')"
       }
+    },
+
+    "planPrices": {
+      ".read": true,
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'network_admin'"
     },
 
     "pensions": {
@@ -29,6 +36,9 @@
         },
         "trialEndsAt": {
           ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (!data.exists() && root.child('users').child(auth.uid).child('pensionId').val() === $pensionId))"
+        },
+        "subscription": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'network_admin'"
         },
         "ownerUid": {
           ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (!data.exists() && auth.uid === newData.val()))"

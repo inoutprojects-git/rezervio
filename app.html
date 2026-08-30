@@ -21,6 +21,11 @@
     .auth-submit:disabled { opacity: .6; cursor: default; }
     .auth-error { color: #dc2626; font-size: 13px; font-weight: 600; margin-bottom: 12px; display: none; }
     .auth-link { display: block; text-align: center; margin-top: 14px; color: #2563eb; font-size: 13.5px; font-weight: 600; text-decoration: none; cursor: pointer; }
+    .plan-card { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border: 2px solid #e2e8f0; border-radius: 11px; cursor: pointer; transition: all .15s; }
+    .plan-card.sel { border-color: #2563eb; background: #eff6ff; }
+    .plan-card-name { font-weight: 800; font-size: 14.5px; color: #1a202c; }
+    .plan-card-desc { font-size: 11.5px; color: #94a3b8; margin-top: 1px; }
+    .plan-card-price { font-weight: 800; font-size: 15px; color: #2563eb; white-space: nowrap; }
   </style>
 </head>
 <body>
@@ -49,6 +54,14 @@
       <form id="signup-form" style="display:none;">
         <input type="email" id="signup-email" class="auth-input" placeholder="Email" required autocomplete="email">
         <input type="password" id="signup-password" class="auth-input" placeholder="Parola (minim 6 caractere)" required autocomplete="new-password" minlength="6">
+
+        <div style="margin-bottom:14px;">
+          <div style="font-size:12.5px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px;">Alege planul</div>
+          <div id="plan-cards" style="display:flex;flex-direction:column;gap:8px;">
+            <div style="text-align:center;font-size:13px;color:#94a3b8;padding:10px;">Se incarca preturile...</div>
+          </div>
+        </div>
+
         <label style="display:flex;align-items:flex-start;gap:8px;margin-bottom:14px;font-size:12.5px;color:#64748b;cursor:pointer;line-height:1.4;">
           <input type="checkbox" id="terms-checkbox" style="margin-top:2px;flex-shrink:0;width:16px;height:16px;">
           <span>Sunt de acord cu <a href="#" id="open-terms" style="color:#2563eb;font-weight:600;">Termenii si Conditiile</a> si <a href="#" id="open-privacy" style="color:#2563eb;font-weight:600;">Politica de Confidentialitate</a></span>
@@ -223,6 +236,37 @@
         signupSubmit.style.opacity = termsCheckbox.checked ? '1' : '.5';
       });
 
+      // Carduri de plan la inregistrare — preturi incarcate din Firebase (planPrices,
+      // public, editabil de Network Admin din Tarife generale). Fallback la preturi
+      // implicite daca nodul nu exista inca (prima rulare, inainte ca adminul sa le seteze).
+      window.PENDING_SELECTED_PLAN = 'basic';
+      var PLAN_META = [
+        { id: 'basic', name: 'Basic', desc: '1 cont \u2014 gestiune interna' },
+        { id: 'standard', name: 'Standard', desc: '3 conturi \u2014 rezervare online' },
+        { id: 'premium', name: 'Premium', desc: '10 conturi \u2014 echipe mari' }
+      ];
+      function renderPlanCards(prices) {
+        var container = document.getElementById('plan-cards');
+        container.innerHTML = '';
+        PLAN_META.forEach(function(pm) {
+          var card = document.createElement('div');
+          card.className = 'plan-card' + (pm.id === window.PENDING_SELECTED_PLAN ? ' sel' : '');
+          card.innerHTML = '<div><div class="plan-card-name">' + pm.name + '</div><div class="plan-card-desc">' + pm.desc + '</div></div>' +
+            '<div class="plan-card-price">' + (prices[pm.id] || '-') + ' lei/lun\u0103</div>';
+          card.addEventListener('click', function() {
+            window.PENDING_SELECTED_PLAN = pm.id;
+            Array.from(container.children).forEach(function(c) { c.classList.remove('sel'); });
+            card.classList.add('sel');
+          });
+          container.appendChild(card);
+        });
+      }
+      firebaseDB.ref('planPrices').once('value').then(function(snap) {
+        renderPlanCards(snap.val() || { basic: 49, standard: 99, premium: 189 });
+      }).catch(function() {
+        renderPlanCards({ basic: 49, standard: 99, premium: 189 });
+      });
+
       // Modale Termeni / Confidentialitate — deschidere/inchidere
       var termsModal = document.getElementById('terms-modal');
       var privacyModal = document.getElementById('privacy-modal');
@@ -266,7 +310,7 @@
             ownerUid: user.uid,
             ownerEmail: user.email,
             pensionName: 'Pensiunea Mea',
-            plan: 'basic',
+            plan: window.PENDING_SELECTED_PLAN || 'basic',
             status: 'active',
             accountCount: 1,
             trialEndsAt: trialEnds,

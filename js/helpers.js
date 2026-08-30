@@ -36,6 +36,11 @@ var fb = {
     return waitForPensionId(3000).then(function(pid) {
       return firebaseDB.ref('pensions/' + pid + '/' + path).remove();
     });
+  },
+  update: function(path, partial) {
+    return waitForPensionId(3000).then(function(pid) {
+      return firebaseDB.ref('pensions/' + pid + '/' + path).update(partial);
+    });
   }
 };
 
@@ -86,7 +91,7 @@ function isActiveFuture(r) { return r.checkIn && addDays(r.checkIn, r.nights || 
 function categorizeReservations(reservations, today) {
   var checkinToday = [], checkoutToday = [], staying = [], future = [];
   reservations.forEach(function(r) {
-    if (!r.checkIn) return;
+    if (!r.checkIn || r.status === 'cancelled') return;
     var checkOut = addDays(r.checkIn, r.nights || 0);
     if (checkOut < today) return;
     if (r.checkIn === today) {
@@ -108,12 +113,13 @@ function categorizeReservations(reservations, today) {
 }
 
 // ── CAMERE LIBERE ACUM (partajata intre TodayBar si ResTab) ────────────────────
-// O camera e "libera" daca nicio rezervare (indiferent de status ocupat/blocat)
-// nu o acopera azi. Rezervarile "Toata locatia" (WHOLE) blocheaza toate camerele.
+// O camera e "libera" daca nicio rezervare activa (indiferent de status ocupat/blocat,
+// dar EXCLUZAND cele anulate) nu o acopera azi. Rezervarile "Toata locatia" (WHOLE)
+// blocheaza toate camerele.
 function getFreeRooms(rooms, reservations, today) {
   var occupied = new Set();
   reservations.forEach(function(r) {
-    if (!r.checkIn) return;
+    if (!r.checkIn || r.status === 'cancelled') return;
     var checkOut = addDays(r.checkIn, r.nights || 0);
     if (r.checkIn <= today && checkOut > today) {
       if (r.room === WHOLE) { rooms.forEach(function(rm) { occupied.add(rm); }); }
@@ -141,6 +147,33 @@ function smsUrl(phone) { return 'sms:' + phone; }
 // (pattern comun: inlocuim '.' cu ',' — reversibil, usor de recunoscut la nevoie).
 function sanitizeEmailKey(email) {
   return (email || '').toLowerCase().replace(/\./g, ',');
+}
+
+// Validare CNP (13 cifre + cifra de control conform algoritmului oficial).
+// Partajata intre app.js si paginile publice (checkin.html) — nu duplicata.
+function isValidCNP(cnp) {
+  if (!/^\d{13}$/.test(cnp)) return false;
+  var weights = [2, 7, 9, 1, 4, 6, 3, 5, 8, 2, 7, 9];
+  var sum = 0;
+  for (var i = 0; i < 12; i++) sum += parseInt(cnp[i], 10) * weights[i];
+  var ctrl = sum % 11;
+  if (ctrl === 10) ctrl = 1;
+  return ctrl === parseInt(cnp[12], 10);
+}
+
+// Validare CUI: 2-10 cifre, cu cifra de control conform algoritmului ANAF.
+// Acceptam si cu prefix "RO" (platitor de TVA) — il curatam inainte de validare.
+function isValidCUI(cuiRaw) {
+  var cui = (cuiRaw || '').toUpperCase().replace(/^RO/, '').trim();
+  if (!/^\d{2,10}$/.test(cui)) return false;
+  var weights = [7, 5, 3, 2, 1, 7, 5, 3, 2];
+  var digits = cui.slice(0, -1).padStart(9, '0').split('').map(Number);
+  var ctrlDigit = parseInt(cui.slice(-1), 10);
+  var sum = 0;
+  for (var i = 0; i < 9; i++) sum += digits[i] * weights[i];
+  var rest = (sum * 10) % 11;
+  if (rest === 10) rest = 0;
+  return rest === ctrlDigit;
 }
 
 // NOTA: isValidCNP si isValidCUI sunt definite in app.js (langa BillingInfo component)

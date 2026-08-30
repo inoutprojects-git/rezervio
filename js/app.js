@@ -17,6 +17,7 @@ function App() {
   var prs = useState(function() { return lc.get('p_prices', {}); }); var roomPrices = prs[0], setRoomPrices = prs[1];
   var pns = useState(function() { return lc.get('p_name', ''); }); var pensionName = pns[0], setPensionName = pns[1];
   var pps = useState(function() { return lc.get('p_photo', ''); }); var pensionPhoto = pps[0], setPensionPhoto = pps[1];
+  var prs2 = useState(function() { return lc.get('p_presentation', {}); }); var presentation = prs2[0], setPresentation = prs2[1];
   var res = useState([]); var reservations = res[0], setRes = res[1];
   var ms = useState(null); var modal = ms[0], setModal = ms[1];
   var cs = useState(null); var confirm = cs[0], setConfirm = cs[1];
@@ -26,6 +27,7 @@ function App() {
   var pds = useState(false); var showPdf = pds[0], setShowPdf = pds[1];
   var prs2 = useState(false); var showPrices = prs2[0], setShowPrices = prs2[1];
   var pss = useState(false); var showPensionSettings = pss[0], setShowPensionSettings = pss[1];
+  var pes = useState(false); var showPresentationEditor = pes[0], setShowPresentationEditor = pes[1];
   var acs = useState(false); var showAccountSettings = acs[0], setShowAccountSettings = acs[1];
   var sms = useState(false); var showMessages = sms[0], setShowMessages = sms[1];
   var mrs = useState(null); var msgRes = mrs[0], setMsgRes = mrs[1];
@@ -64,6 +66,7 @@ function App() {
         if (cfg.roomPrices) { setRoomPrices(cfg.roomPrices); lc.set('p_prices', cfg.roomPrices); }
         if (cfg.pensionName !== undefined) { setPensionName(cfg.pensionName); lc.set('p_name', cfg.pensionName); }
         if (cfg.pensionPhoto !== undefined) { setPensionPhoto(cfg.pensionPhoto); lc.set('p_photo', cfg.pensionPhoto); }
+        if (cfg.presentation !== undefined) { setPresentation(cfg.presentation); lc.set('p_presentation', cfg.presentation); }
         if (cfg.bookingRules) { setBookingRules(cfg.bookingRules); lc.set('p_bookrules', cfg.bookingRules); }
         if (cfg.wholeEnabled !== undefined) { setWholeEnabled(cfg.wholeEnabled); lc.set('p_whole_enabled', cfg.wholeEnabled); }
       }
@@ -108,7 +111,7 @@ function App() {
   // campuri precum pensionName/pensionPhoto cand se salveaza doar camere/surse, sau invers.
   function saveConfig(partial) {
     setSync('syncing');
-    var merged = Object.assign({}, { rooms: rooms, sources: sources, roomPrices: roomPrices, pensionName: pensionName, pensionPhoto: pensionPhoto, bookingRules: bookingRules, wholeEnabled: wholeEnabled }, partial);
+    var merged = Object.assign({}, { rooms: rooms, sources: sources, roomPrices: roomPrices, pensionName: pensionName, pensionPhoto: pensionPhoto, presentation: presentation, bookingRules: bookingRules, wholeEnabled: wholeEnabled }, partial);
     return fb.set('config', merged).then(function() { setSync('online'); }).catch(function(err) {
       console.error('saveConfig error:', err);
       setSync('error');
@@ -136,7 +139,7 @@ function App() {
 
   function saveRes(data, force) {
     if (!force && data.room && data.checkIn && data.nights) {
-      var cl = reservations.find(function(r) { return r.room === data.room && r.id !== data.id && overlaps(data.checkIn, data.nights, r.checkIn, r.nights); });
+      var cl = reservations.find(function(r) { return r.room === data.room && r.id !== data.id && r.status !== 'cancelled' && overlaps(data.checkIn, data.nights, r.checkIn, r.nights); });
       if (cl) {
         setConfirm({ msg: 'Camera ' + data.room + ' e rezervata de ' + fullName(cl) + '! Salvezi totusi?', okLbl: 'Salveaza (OB)', ok: function() { setConfirm(null); saveRes(data, true); } });
         return;
@@ -147,10 +150,14 @@ function App() {
     if (data.id && reservations.find(function(r) { return r.id === data.id; })) {
       var id = data.id;
       var rest = Object.assign({}, data); delete rest.id;
-      p = fb.set('reservations/' + id, rest);
+      p = fb.set('reservations/' + id, rest).then(function() { return syncBlockedDates(id, rest); });
     } else {
       var rest2 = Object.assign({}, data); delete rest2.id;
-      p = fb.push('reservations', Object.assign(rest2, { createdAt: Date.now() }));
+      var newId = null;
+      p = fb.push('reservations', Object.assign(rest2, { createdAt: Date.now() })).then(function(key) {
+        newId = key;
+        return syncBlockedDates(key, rest2);
+      });
     }
     p.then(function() { setSync('online'); setModal(null); }).catch(function(err) {
       console.error('saveRes error:', err);
@@ -160,13 +167,23 @@ function App() {
     });
   }
 
+  // Sincronizeaza intrarea PII-free din blockedDates (folosita de booking.html public
+  // pentru a colora calendarul, fara sa expuna nume/telefoane) — aceeasi cheie ca
+  // rezervarea. O rezervare anulata elibereaza automat data (nu mai blocheaza calendarul).
+  function syncBlockedDates(id, resData) {
+    if (resData.status === 'cancelled') {
+      return fb.remove('blockedDates/' + id).catch(function() {});
+    }
+    return fb.set('blockedDates/' + id, { room: resData.room, checkIn: resData.checkIn, nights: resData.nights }).catch(function() {});
+  }
+
   function delRes(id, name) {
     setConfirm({
       msg: 'Stergi rezervarea pentru "' + name + '"?',
       okLbl: 'Sterge',
       ok: function() {
         setSync('syncing');
-        fb.remove('reservations/' + id).then(function() { setSync('online'); setConfirm(null); }).catch(function(err) {
+        fb.remove('reservations/' + id).then(function() { return fb.remove('blockedDates/' + id).catch(function(){}); }).then(function() { setSync('online'); setConfirm(null); }).catch(function(err) {
           console.error('delRes error:', err);
           setSync('online');
           setConfirm(null);
@@ -224,6 +241,15 @@ function App() {
     return saveConfig({ pensionName: name, pensionPhoto: photo }).then(function() {
       setPensionName(name); lc.set('p_name', name);
       setPensionPhoto(photo); lc.set('p_photo', photo);
+    });
+  }
+
+  // Datele paginii publice de prezentare (descriere, facilitati, galerie, date legale
+  // recomandate) — separate de savePensionSettings (nume+poza principala) ca sa nu
+  // amestecam formulare diferite conceptual.
+  function savePresentation(data) {
+    return saveConfig({ presentation: data }).then(function() {
+      setPresentation(data); lc.set('p_presentation', data);
     });
   }
 
@@ -387,6 +413,7 @@ function App() {
       onOpenPdf: function() { setShowPdf(true); },
       onOpenPrices: function() { setShowPrices(true); },
       onOpenPensionSettings: function() { setShowPensionSettings(true); },
+      onOpenPresentation: function() { setShowPresentationEditor(true); },
       onOpenAccountSettings: function() { setShowAccountSettings(true); },
       onOpenBillingInfo: function() { setShowBillingInfo(true); },
       onOpenMessages: function() { setMsgRes(null); setShowMessages(true); },
@@ -433,6 +460,7 @@ function App() {
     showRooms && h(RoomMgr, { rooms: rooms, reservations: reservations, onSave: saveRooms, onClose: function() { setShowRooms(false); } }),
     showSrc && h(SrcMgr, { sources: sources, onSave: saveSrc, onClose: function() { setShowSrc(false); } }),
     showPensionSettings && h(PensionSettings, { pensionName: pensionName, pensionPhoto: pensionPhoto, onSave: savePensionSettings, onClose: function() { setShowPensionSettings(false); } }),
+    showPresentationEditor && h(PresentationEditor, { presentation: presentation, onSave: savePresentation, onClose: function() { setShowPresentationEditor(false); } }),
     showAccountSettings && h(AccountSettings, { onClose: function() { setShowAccountSettings(false); } }),
     showBillingInfo && h(BillingInfo, { billingInfo: billingInfo, onSave: saveBillingInfo, onClose: function() { setShowBillingInfo(false); } }),
     showMessages && h(MessagesMgr, { res: msgRes, pensionName: pensionName, onClose: function() { setShowMessages(false); setMsgRes(null); } }),
@@ -506,13 +534,90 @@ function App() {
 // Vede toate pensiunile, poate schimba plan/status/trial. NU editeaza rezervari
 // direct (pentru asta, Firebase Console ramane calea pentru cazuri exceptionale).
 // ══════════════════════════════════════════════════════════════════════════
+// ── EDITOR TARIFE GENERALE (Network Admin, doar desktop) ─────────────────────
+// Preturile afisate la alegerea planului (inregistrare noua) si, in viitor, pe landing
+// page. Schimbarea de aici NU modifica retroactiv pensiunile deja pe un plan — doar
+// pretul aratat clientilor NOI la momentul alegerii.
+function PlanPricesEditor(props) {
+  var ps = useState(Object.assign({ basic: 49, standard: 99, premium: 189 }, props.prices));
+  var prices = ps[0], setPrices = ps[1];
+  var svs = useState(false); var saving = svs[0], setSaving = svs[1];
+  var oks = useState(false); var saved = oks[0], setSaved = oks[1];
+
+  function update(plan, val) {
+    setPrices(Object.assign({}, prices, { [plan]: parseInt(val) || 0 }));
+    setSaved(false);
+  }
+
+  function handleSave() {
+    setSaving(true);
+    props.onSave(prices).then(function() {
+      setSaving(false); setSaved(true);
+      setTimeout(function() { setSaved(false); }, 2500);
+    }).catch(function(e) { setSaving(false); alert('Eroare: ' + e.message); });
+  }
+
+  var planMeta = [
+    { id: 'basic', label: 'Basic', color: '#64748b', desc: '1 cont — gestiune interna' },
+    { id: 'standard', label: 'Standard', color: '#2563eb', desc: '3 conturi — pagina publica + rezervare online' },
+    { id: 'premium', label: 'Premium', color: '#7c3aed', desc: '10 conturi — echipe mai mari' }
+  ];
+
+  return h('div', { className: 'page', style: { maxWidth: 700 } },
+    h('div', { className: 'card', style: { padding: 20 } },
+      h('div', { style: { fontSize: 17, fontWeight: 800, color: '#1e3a5f', marginBottom: 4 } }, '\uD83D\uDCB0 Tarife generale'),
+      h('div', { style: { fontSize: 13.5, color: '#64748b', marginBottom: 20 } }, 'Preturile afisate clientilor la alegerea planului, in timpul inregistrarii. Nu afecteaza retroactiv pensiunile deja abonate.'),
+
+      planMeta.map(function(pm) {
+        return h('div', { key: pm.id, style: { display: 'flex', alignItems: 'center', gap: 14, padding: '14px 0', borderBottom: '1px solid #f1f5f9' } },
+          h('div', { style: { width: 90, flexShrink: 0 } },
+            h('div', { style: { fontWeight: 800, fontSize: 15, color: pm.color } }, pm.label)
+          ),
+          h('div', { style: { flex: 1, fontSize: 12.5, color: '#94a3b8' } }, pm.desc),
+          h('div', { style: { display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 } },
+            h('input', {
+              type: 'number', min: 0, value: prices[pm.id],
+              style: { width: 80, padding: '9px 10px', borderRadius: 8, border: '1.5px solid #d1d9e0', fontSize: 15, fontWeight: 700, textAlign: 'right' },
+              onChange: function(e) { update(pm.id, e.target.value); }
+            }),
+            h('span', { style: { fontSize: 13, color: '#64748b', fontWeight: 600 } }, 'lei/lun\u0103')
+          )
+        );
+      }),
+
+      h('button', {
+        style: { marginTop: 18, padding: '13px 22px', background: saved ? '#16a34a' : '#2563eb', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: 'pointer' },
+        disabled: saving, onClick: handleSave
+      }, saving ? 'Se salveaza...' : saved ? '\u2713 Salvat!' : 'Salveaza tarifele')
+    )
+  );
+}
+
 function NetworkAdminDashboard() {
   var ls = useState(true); var loading = ls[0], setLoading = ls[1];
-  var ps = useState([]); var pensionsList = ps[0], setPensionsList = ps[1];
+  var ps = useState([]); var pensionsListRaw = ps[0], setPensionsListRaw = ps[1];
+  var us = useState({}); var usersMap = us[0], setUsersMap = us[1];
+  var pps = useState({}); var planPrices = pps[0], setPlanPrices = pps[1];
   var bp = useState({}); var busy = bp[0], setBusy = bp[1]; // { [pensionId]: true } cat timp o actiune e in curs
   var dts = useState(null); var deleteTarget = dts[0], setDeleteTarget = dts[1];
-  var atb = useState('pensions'); var activeTab = atb[0], setActiveTab = atb[1]; // 'pensions' | 'support'
+  var atb = useState('pensions'); var activeTab = atb[0], setActiveTab = atb[1]; // 'pensions' | 'support' | 'tarife'
   var scp = useState(null); var chatPension = scp[0], setChatPension = scp[1];
+  var isDesktop = useState(function() { return typeof window !== 'undefined' && window.innerWidth >= 1024; })[0];
+
+  // Pensiunile afisate exclud orice pensiune al carei owner are ACUM rolul network_admin —
+  // ramasita de la bootstrap-ul contului de admin (inregistrare normala ca Owner, apoi
+  // schimbare manuala de rol in Firebase Console). Nu e un client real, nu trebuie sa
+  // apara in lista. Adaugam si datele de facturare ale fiecarui owner (users/{uid}/billingInfo),
+  // disponibile acum ca citim si users/ in bloc.
+  var pensionsList = useMemo(function() {
+    return pensionsListRaw.filter(function(p) {
+      var ownerRole = p.ownerUid && usersMap[p.ownerUid] ? usersMap[p.ownerUid].role : null;
+      return ownerRole !== 'network_admin';
+    }).map(function(p) {
+      var ownerUser = p.ownerUid ? usersMap[p.ownerUid] : null;
+      return Object.assign({}, p, { billingInfo: ownerUser ? ownerUser.billingInfo : null });
+    });
+  }, [pensionsListRaw, usersMap]);
 
   // Inbox de suport, derivat direct din pensionsList (care contine deja supportChat, fiind
   // citit integral din /pensions). Sortat pe prioritate: conversatii care asteapta raspuns
@@ -546,11 +651,20 @@ function NetworkAdminDashboard() {
       var data = snap.val() || {};
       var arr = Object.keys(data).map(function(id) { return Object.assign({ id: id }, data[id]); });
       arr.sort(function(a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
-      setPensionsList(arr);
+      setPensionsListRaw(arr);
       setLoading(false);
     };
     ref.on('value', cb, function(err) { console.error('NetworkAdminDashboard read error:', err); setLoading(false); });
-    return function() { ref.off('value', cb); };
+
+    var usersRef = firebaseDB.ref('users');
+    var usersCb = function(snap) { setUsersMap(snap.val() || {}); };
+    usersRef.on('value', usersCb, function(err) { console.error('users read error:', err); });
+
+    var pricesRef = firebaseDB.ref('planPrices');
+    var pricesCb = function(snap) { setPlanPrices(snap.val() || { basic: 49, standard: 99, premium: 189 }); };
+    pricesRef.on('value', pricesCb);
+
+    return function() { ref.off('value', cb); usersRef.off('value', usersCb); pricesRef.off('value', pricesCb); };
   }, []);
 
   function setBusyFor(id, val) { setBusy(function(prev) { return Object.assign({}, prev, { [id]: val }); }); }
@@ -589,6 +703,13 @@ function NetworkAdminDashboard() {
       .then(function() { return firebaseDB.ref('pensions/' + id + '/status').set('active'); })
       .catch(function(err) { alert('Eroare: ' + err.message); })
       .then(function() { setBusyFor(id, false); });
+  }
+
+  // Tarife generale — vizibile la inregistrare (alegerea planului) si pe landing page (viitor).
+  // Editabile doar de Network Admin, doar pe desktop (nu are sens pe telefon — actiune rara,
+  // care necesita atentie, nu grabita intre doua task-uri operationale).
+  function savePlanPrices(prices) {
+    return firebaseDB.ref('planPrices').set(prices).then(function() { setPlanPrices(prices); });
   }
 
   // Stergere completa (Varianta 2): sterge toate inregistrarile users/{uid} ale membrilor
@@ -636,7 +757,11 @@ function NetworkAdminDashboard() {
             h('button', {
               style: { padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', background: activeTab === 'support' ? '#fff' : 'none', color: activeTab === 'support' ? '#1e3a5f' : '#fff', display: 'flex', alignItems: 'center', gap: 6 },
               onClick: function() { setActiveTab('support'); }
-            }, '\uD83D\uDCAC Suport', needsReplyCount > 0 && h('span', { style: { background: '#dc2626', color: '#fff', borderRadius: 10, padding: '1px 7px', fontSize: 11 } }, needsReplyCount))
+            }, '\uD83D\uDCAC Suport', needsReplyCount > 0 && h('span', { style: { background: '#dc2626', color: '#fff', borderRadius: 10, padding: '1px 7px', fontSize: 11 } }, needsReplyCount)),
+            isDesktop && h('button', {
+              style: { padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, border: 'none', cursor: 'pointer', background: activeTab === 'tarife' ? '#fff' : 'none', color: activeTab === 'tarife' ? '#1e3a5f' : '#fff' },
+              onClick: function() { setActiveTab('tarife'); }
+            }, '\uD83D\uDCB0 Tarife')
           ),
           h('button', { style: { padding: '9px 16px', background: 'rgba(255,255,255,.15)', border: '1.5px solid rgba(255,255,255,.25)', color: '#fff', borderRadius: 9, fontWeight: 700, cursor: 'pointer' }, onClick: function() { firebase.auth().signOut(); } }, 'Deconectare')
         )
@@ -677,6 +802,16 @@ function NetworkAdminDashboard() {
                   h('div', { style: { fontSize: 11, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase' } }, 'Inregistrat'),
                   h('div', { style: { fontSize: 15, fontWeight: 700, color: '#1a202c' } }, p.createdAt ? fmt(new Date(p.createdAt).toISOString().slice(0, 10)) : '-')
                 )
+              ),
+              p.billingInfo && (p.billingInfo.fullName || p.billingInfo.companyName) && h('div', { style: { background: '#f8fafc', borderRadius: 9, padding: '10px 12px', marginBottom: 14, fontSize: 12.5 } },
+                h('div', { style: { fontWeight: 800, color: '#475569', textTransform: 'uppercase', fontSize: 10.5, marginBottom: 4 } }, '\uD83E\uDDFE Date facturare'),
+                p.billingInfo.type === 'pj'
+                  ? h('div', { style: { color: '#1a202c' } },
+                      h('strong', null, p.billingInfo.companyName || '-'), ' \u00B7 CUI: ' + (p.billingInfo.cui || '-')
+                    )
+                  : h('div', { style: { color: '#1a202c' } },
+                      h('strong', null, p.billingInfo.fullName || '-'), ' \u00B7 CNP: ' + (p.billingInfo.cnp || '-')
+                    )
               ),
               h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } },
                 h('select', {
@@ -738,6 +873,8 @@ function NetworkAdminDashboard() {
             );
           })
     ),
+
+    activeTab === 'tarife' && isDesktop && h(PlanPricesEditor, { prices: planPrices, onSave: savePlanPrices }),
 
     deleteTarget && h(Confirm, {
       msg: 'Stergi COMPLET pensiunea "' + (deleteTarget.pensionName || '(fara nume)') + '"? Toate rezervarile, configurarile si conturile asociate (Owner + Staff) vor fi sterse ireversibil, iar email-ul "' + (deleteTarget.ownerEmail || '-') + '" va fi blocat sa mai creeze un cont nou gratuit.',
@@ -914,13 +1051,13 @@ function AvailabilitySearch(props) {
     if (!checkIn || !nights) return [];
     return rooms.map(function(room) {
       var conflict = reservations.find(function(r) {
-        return blocksRoom(r, room) && overlaps(checkIn, nights, r.checkIn, r.nights || 0);
+        return blocksRoom(r, room) && r.status !== 'cancelled' && overlaps(checkIn, nights, r.checkIn, r.nights || 0);
       });
       if (conflict) return { room: room, status: 'occupied', detail: fullName(conflict) + ' (' + fmt(conflict.checkIn) + '\u2192' + fmt(addDays(conflict.checkIn, conflict.nights || 0)) + ')' };
 
       if (bookingRules.minGapDays > 0) {
         var gapConflict = reservations.find(function(r) {
-          if (!blocksRoom(r, room)) return false;
+          if (!blocksRoom(r, room) || r.status === 'cancelled') return false;
           var rCheckOut = addDays(r.checkIn, r.nights || 0);
           var gapBefore = r.checkIn < checkIn && rCheckOut <= checkIn && addDays(rCheckOut, bookingRules.minGapDays) > checkIn;
           var gapAfter = r.checkIn >= checkOut && addDays(checkOut, bookingRules.minGapDays) > r.checkIn;
@@ -1302,7 +1439,7 @@ function ResMdl(props) {
     if (!form.room || !form.checkIn || !form.nights) return list;
 
     // 1. Overlap direct pe aceeasi camera
-    var cl = reservations.find(function(r) { return r.room === form.room && r.id !== form.id && overlaps(form.checkIn, form.nights, r.checkIn, r.nights); });
+    var cl = reservations.find(function(r) { return r.room === form.room && r.id !== form.id && r.status !== 'cancelled' && overlaps(form.checkIn, form.nights, r.checkIn, r.nights); });
     if (cl) list.push('Camera deja rezervata de ' + fullName(cl) + '!');
 
     // 2. Sejur minim
@@ -1322,7 +1459,7 @@ function ResMdl(props) {
     if (bookingRules.minGapDays > 0) {
       var thisCheckOut = addDays(form.checkIn, form.nights);
       var gapViolation = reservations.find(function(r) {
-        if (r.room !== form.room || r.id === form.id) return false;
+        if (r.room !== form.room || r.id === form.id || r.status === 'cancelled') return false;
         var rCheckOut = addDays(r.checkIn, r.nights || 0);
         // Alta rezervare se termina chiar inainte de a noastra, dar prea aproape
         var gapBefore = r.checkIn < form.checkIn && rCheckOut <= form.checkIn && addDays(rCheckOut, bookingRules.minGapDays) > form.checkIn;
@@ -1423,6 +1560,180 @@ function ISms() { return h('svg',{width:18,height:18,viewBox:'0 0 24 24',fill:'n
 // sunt definite in config.js si helpers.js — nu le redefinim aici.
 
 // ── RESERVATION DETAIL MODAL ─────────────────────────────────────────────────
+// ── ANULARE REZERVARE (soft — pastreaza istoric, nu sterge definitiv) ────────
+function CancelMdl(props) {
+  var res = props.res;
+  var rs = useState('Client a anulat'); var reason = rs[0], setReason = rs[1];
+  var ns = useState(''); var notes = ns[0], setNotes = ns[1];
+  var sv = useState(false); var saving = sv[0], setSaving = sv[1];
+  var user = (firebase.auth().currentUser && firebase.auth().currentUser.email) || 'Necunoscut';
+
+  function doCancel() {
+    setSaving(true);
+    fb.update('reservations/' + res.id, {
+      status: 'cancelled',
+      cancelledAt: Date.now(),
+      cancelledBy: user,
+      cancelReason: reason,
+      cancelNotes: notes.trim()
+    }).then(function() {
+      return fb.remove('blockedDates/' + res.id).catch(function() {});
+    }).then(function() {
+      props.onClose();
+      if (props.onCancelled) props.onCancelled();
+    }).catch(function(e) {
+      setSaving(false);
+      alert('Eroare: ' + e.message);
+    });
+  }
+
+  return h('div', { className: 'ov', style: { zIndex: 220 }, onClick: props.onClose },
+    h('div', { className: 'mdl', onClick: function(e) { e.stopPropagation(); }, style: { maxWidth: 420 } },
+      h('div', { className: 'mhdr', style: { background: '#dc2626' } },
+        h('span', { className: 'mtit' }, '\uD83D\uDEAB Anuleaza rezervarea'),
+        h('button', { className: 'mclose', onClick: props.onClose }, '\u2715')
+      ),
+      h('div', { className: 'mbody' },
+        h('div', { style: { background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: 10, padding: '12px 14px', marginBottom: 16, fontSize: 14, color: '#7f1d1d' } },
+          h('div', { style: { fontWeight: 700, marginBottom: 4 } }, '\u26A0\uFE0F Atentie — aceasta actiune nu sterge rezervarea'),
+          'Rezervarea va fi marcata ca anulata si pastrata in istoric pentru analiza.'
+        ),
+        h('div', { style: { background: '#f8fafc', borderRadius: 10, padding: '12px 14px', marginBottom: 16 } },
+          h('div', { style: { fontSize: 15, fontWeight: 700 } }, fullName(res)),
+          h('div', { style: { fontSize: 13, color: '#64748b', marginTop: 4 } },
+            res.room + ' \u00B7 ' + fmt(res.checkIn) + ' \u2192 ' + fmt(addDays(res.checkIn, res.nights || 0))
+          )
+        ),
+        h(Field, { lbl: 'Motiv anulare' },
+          h('select', { className: 'finp', value: reason, onChange: function(e) { setReason(e.target.value); } },
+            CANCEL_REASONS.map(function(r) { return h('option', { key: r, value: r }, r); })
+          )
+        ),
+        h(Field, { lbl: 'Note suplimentare (optional)' },
+          h('textarea', {
+            className: 'finp', rows: 3, style: { resize: 'vertical' },
+            placeholder: 'Ex: Client a sunat si a solicitat anularea...',
+            value: notes, onChange: function(e) { setNotes(e.target.value); }
+          })
+        )
+      ),
+      h('div', { className: 'mfoot' },
+        h('button', { className: 'mcanc', style: { flex: 1 }, onClick: props.onClose }, 'Renunta'),
+        h('button', {
+          style: { flex: 2, padding: '13px', background: saving ? '#94a3b8' : '#dc2626', color: '#fff', borderRadius: 11, fontWeight: 800, fontSize: 15, border: 'none', cursor: 'pointer' },
+          disabled: saving, onClick: doCancel
+        }, saving ? '\u23F3 Se salveaza...' : '\uD83D\uDEAB Confirma anularea')
+      )
+    )
+  );
+}
+
+// ── JURNAL COMUNICARE (istoric interactiuni cu oaspetele, per rezervare) ─────
+function CommLog(props) {
+  var resId = props.resId;
+  var ns = useState([]); var notes = ns[0], setNotes = ns[1];
+  var ts = useState(''); var text = ts[0], setText = ts[1];
+  var cs = useState('whatsapp'); var channel = cs[0], setChannel = cs[1];
+  var sv = useState(false); var saving = sv[0], setSaving = sv[1];
+  var us = useState(function() { return localStorage.getItem('comm_user') || ''; });
+  var user = us[0], setUser = us[1];
+  var es = useState(!user); var editUser = es[0], setEditUser = es[1];
+  var uv = useState(user); var userVal = uv[0], setUserVal = uv[1];
+
+  useEffect(function() {
+    if (!resId) return;
+    var unsub = fb.on('reservations/' + resId + '/commLog', function(data) {
+      var arr = data ? Object.keys(data).map(function(k) { return Object.assign({}, data[k], { id: k }); }) : [];
+      arr.sort(function(a, b) { return (a.ts || 0) - (b.ts || 0); });
+      setNotes(arr);
+    });
+    return unsub;
+  }, [resId]);
+
+  function saveUser(v) {
+    setUser(v); setUserVal(v);
+    localStorage.setItem('comm_user', v);
+    setEditUser(false);
+  }
+
+  function addNote() {
+    if (!text.trim()) return;
+    setSaving(true);
+    var note = { text: text.trim(), channel: channel, user: user || 'Necunoscut', ts: Date.now() };
+    fb.push('reservations/' + resId + '/commLog', note).then(function() {
+      setText(''); setSaving(false);
+    }).catch(function(e) {
+      console.error('CommLog push error:', e);
+      setSaving(false);
+      alert('Eroare: ' + e.message);
+    });
+  }
+
+  function deleteNote(noteId) {
+    fb.remove('reservations/' + resId + '/commLog/' + noteId);
+  }
+
+  var channelMeta = {};
+  COMM_CHANNELS.forEach(function(c) { channelMeta[c.id] = c; });
+
+  function fmtTs(ts) {
+    var d = new Date(ts);
+    var now = new Date();
+    var diff = now - d;
+    if (diff < 60000) return 'acum';
+    if (diff < 3600000) return Math.floor(diff / 60000) + ' min';
+    if (diff < 86400000) return Math.floor(diff / 3600000) + ' h';
+    return fmt(d.toISOString().slice(0, 10)) + ' ' + d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
+  }
+
+  return h('div', { className: 'ov', style: { zIndex: 220 }, onClick: props.onClose },
+    h('div', { className: 'mdl', onClick: function(e) { e.stopPropagation(); } },
+      h('div', { className: 'mhdr' },
+        h('span', { className: 'mtit' }, '\uD83D\uDCAC Jurnal comunicare'),
+        h('button', { className: 'mclose', onClick: props.onClose }, '\u2715')
+      ),
+      h('div', { className: 'mbody' },
+        editUser
+          ? h('div', { style: { display: 'flex', gap: 8, marginBottom: 16 } },
+              h('input', { className: 'finp', placeholder: 'Numele tau (pentru jurnal)', value: userVal, onChange: function(e) { setUserVal(e.target.value); } }),
+              h('button', { style: { padding: '0 16px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer' }, onClick: function() { saveUser(userVal); } }, 'OK')
+            )
+          : h('div', { style: { fontSize: 13, color: '#64748b', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 } },
+              '\uD83D\uDC64 Notezi ca: ', h('strong', null, user), h('a', { style: { color: '#2563eb', cursor: 'pointer', fontSize: 12 }, onClick: function() { setEditUser(true); } }, '(schimba)')
+            ),
+
+        notes.length === 0 && h('div', { style: { textAlign: 'center', color: '#94a3b8', padding: '20px 0', fontSize: 14 } }, 'Nicio interactiune notata inca.'),
+
+        notes.map(function(n) {
+          var meta = channelMeta[n.channel] || channelMeta.other;
+          return h('div', { key: n.id, style: { display: 'flex', gap: 10, padding: '10px 0', borderBottom: '1px solid #f1f5f9' } },
+            h('span', { style: { fontSize: 18, flexShrink: 0 } }, meta.icon),
+            h('div', { style: { flex: 1, minWidth: 0 } },
+              h('div', { style: { fontSize: 14, color: '#1a202c' } }, n.text),
+              h('div', { style: { fontSize: 11.5, color: '#94a3b8', marginTop: 2 } }, n.user + ' \u00B7 ' + meta.label + ' \u00B7 ' + fmtTs(n.ts))
+            ),
+            h('button', { style: { background: 'none', border: 'none', color: '#cbd5e1', cursor: 'pointer', fontSize: 16, flexShrink: 0 }, onClick: function() { deleteNote(n.id); } }, '\u2715')
+          );
+        })
+      ),
+      h('div', { style: { padding: '12px 14px', borderTop: '1px solid #f1f5f9', display: 'flex', gap: 8 } },
+        h('select', { className: 'finp', style: { width: 'auto', flexShrink: 0 }, value: channel, onChange: function(e) { setChannel(e.target.value); } },
+          COMM_CHANNELS.map(function(c) { return h('option', { key: c.id, value: c.id }, c.icon + ' ' + c.label); })
+        ),
+        h('input', {
+          className: 'finp', style: { flex: 1 }, placeholder: 'Ex: am sunat, oaspetele confirma sosirea la 18:00',
+          value: text, onChange: function(e) { setText(e.target.value); },
+          onKeyDown: function(e) { if (e.key === 'Enter') addNote(); }
+        }),
+        h('button', {
+          style: { padding: '0 16px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 9, fontWeight: 700, cursor: 'pointer' },
+          disabled: saving || !text.trim(), onClick: addNote
+        }, '\u27A4')
+      )
+    )
+  );
+}
+
 function ResDetail(props) {
   var res = props.res, sources = props.sources;
   var checkOut = addDays(res.checkIn, res.nights);
@@ -1436,6 +1747,10 @@ function ResDetail(props) {
   var editingSim = es[0], setEditingSim = es[1];
   var gd = useState(false);
   var showGuestForm = gd[0], setShowGuestForm = gd[1];
+  var cm = useState(false);
+  var showCancel = cm[0], setShowCancel = cm[1];
+  var cl = useState(false);
+  var showCommLog = cl[0], setShowCommLog = cl[1];
 
   function saveSim(v) { setSimPhone(v); setSimPhoneLocal(v); setEditingSim(false); }
 
@@ -1488,16 +1803,27 @@ function ResDetail(props) {
           )
         ),
         res.comments && h('div',{className:'dmod-comm'},'\uD83D\uDCAC '+res.comments),
+        res.status === 'cancelled' && h('div', { style: { background: '#fef2f2', border: '1.5px solid #fca5a5', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#7f1d1d' } },
+          h('div', { style: { fontWeight: 800, marginBottom: 2 } }, '\uD83D\uDEAB Rezervare anulata'),
+          h('div', null, (res.cancelReason || '-') + (res.cancelledBy ? ' \u00B7 de ' + res.cancelledBy : '')),
+          res.cancelNotes && h('div', { style: { marginTop: 4, fontStyle: 'italic' } }, res.cancelNotes)
+        ),
         // Fisa client button (separat, deasupra actiunilor principale)
         h('button', {
           style: { width: '100%', padding: '12px', marginBottom: 12, background: '#f0f4f8', color: '#1e3a5f', border: '1.5px dashed #94a3b8', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 },
           onClick: function() { setShowGuestForm(true); }
         }, '\uD83D\uDCCB ', res.guestDetails ? 'Fisa client (completata)' : 'Completeaza fisa client'),
+        // Jurnal comunicare button
+        h('button', {
+          style: { width: '100%', padding: '12px', marginBottom: 12, background: '#f0f4f8', color: '#1e3a5f', border: '1.5px dashed #94a3b8', borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 },
+          onClick: function() { setShowCommLog(true); }
+        }, '\uD83D\uDCAC Jurnal comunicare'),
         // Action buttons
         h('div', { className: 'dmod-acts' },
           h('button',{className:'dmod-act-btn',style:{background:'#eff6ff',color:'#2563eb'},onClick:function(){props.onEdit(res);props.onClose();}},h(IEdit),' Editeaza'),
           h('button',{className:'dmod-act-btn',style:{background:'#f5f3ff',color:'#7c3aed'},onClick:function(){props.onCopy(res);props.onClose();}},h(ICopy),' Copiaza'),
           h('button',{className:'dmod-act-btn',style:{background:'#ecfeff',color:'#0891b2'},onClick:function(){props.onMove(res);props.onClose();}},h(IMove),' Muta'),
+          res.status !== 'cancelled' && h('button',{className:'dmod-act-btn',style:{background:'#fff7ed',color:'#c2410c'},onClick:function(){setShowCancel(true);}},'\uD83D\uDEAB',' Anuleaza'),
           h('button',{className:'dmod-act-btn',style:{background:'#fef2f2',color:'#dc2626'},onClick:function(){props.onDelete(res.id,fullName(res));props.onClose();}},h(ITrash),' Sterge')
         )
       )
@@ -1507,6 +1833,15 @@ function ResDetail(props) {
       pensionName: props.pensionName,
       onSave: props.onSaveGuestDetails,
       onClose: function() { setShowGuestForm(false); }
+    }),
+    showCancel && h(CancelMdl, {
+      res: res,
+      onClose: function() { setShowCancel(false); },
+      onCancelled: function() { setShowCancel(false); props.onClose(); }
+    }),
+    showCommLog && h(CommLog, {
+      resId: res.id,
+      onClose: function() { setShowCommLog(false); }
     })
   );
 }
@@ -2467,6 +2802,7 @@ function PricesMgr(props) {
   var ts = useState('prices'); var tab = ts[0], setTab = ts[1];
 
   var bookingUrl = window.location.origin + '/booking.html?p=' + PENSION_ID;
+  var presentationUrl = window.location.origin + '/prezentare.html?p=' + PENSION_ID;
 
   function copyLink() {
     navigator.clipboard.writeText(bookingUrl).catch(function() {
@@ -2477,6 +2813,18 @@ function PricesMgr(props) {
     });
     setCopied(true);
     setTimeout(function() { setCopied(false); }, 2500);
+  }
+
+  var cp2 = useState(''); var copiedPres = cp2[0], setCopiedPres = cp2[1];
+  function copyPresentationLink() {
+    navigator.clipboard.writeText(presentationUrl).catch(function() {
+      var el = document.createElement('textarea');
+      el.value = presentationUrl; document.body.appendChild(el);
+      el.select(); document.execCommand('copy');
+      document.body.removeChild(el);
+    });
+    setCopiedPres(true);
+    setTimeout(function() { setCopiedPres(false); }, 2500);
   }
 
   var tabSt = function(active) { return {
@@ -2544,6 +2892,18 @@ function PricesMgr(props) {
                 onClick: copyLink
               }, copied ? '\u2713 Copiat!' : '\uD83D\uDCCB Copiaza')
             )
+          ),
+          h('div', { style:{background:'#f8fafc',borderRadius:12,padding:16,border:'1.5px solid #e2e8f0',marginBottom:16} },
+            h('div', { style:{fontSize:14,fontWeight:700,color:'#1e3a5f',marginBottom:10} }, '\uD83C\uDF10 Link pagina de prezentare:'),
+            h('div', { style:{display:'flex',gap:8,alignItems:'center'} },
+              h('input', { className:'finp', style:{fontSize:14,color:'#64748b'}, readOnly:true, value:presentationUrl, onFocus:function(e){e.target.select();} }),
+              h('button', {
+                style:{padding:'11px 14px',borderRadius:9,fontWeight:700,fontSize:14,border:'none',cursor:'pointer',flexShrink:0,
+                  background:copiedPres?'#16a34a':'#2563eb',color:'#fff',whiteSpace:'nowrap'},
+                onClick: copyPresentationLink
+              }, copiedPres ? '\u2713 Copiat!' : '\uD83D\uDCCB Copiaza')
+            ),
+            h('div', { style:{fontSize:11.5,color:'#94a3b8',marginTop:8} }, 'Completeaza pagina de prezentare din Configurare pentru a personaliza continutul (poze, descriere, facilitati).')
           ),
           // WhatsApp share
           h('a', {
@@ -2805,6 +3165,10 @@ function Drawer(props) {
           props.userRole === 'owner' && h('div', { className: 'dsub-item', onClick: function() { props.onOpenPensionSettings(); props.onClose(); } },
             h('span', { style: { fontSize: 15 } }, '\uD83C\uDFE1'),
             h('span', { className: 'dsub-lbl' }, props.pensionName || 'Numeste pensiunea')
+          ),
+          props.userRole === 'owner' && h('div', { className: 'dsub-item', onClick: function() { props.onOpenPresentation(); props.onClose(); } },
+            h('span', { style: { fontSize: 15 } }, '\uD83C\uDF10'),
+            h('span', { className: 'dsub-lbl' }, 'Pagina de prezentare')
           ),
           h('div', { className: 'dsub-item', onClick: function() { props.onOpenAccountSettings(); props.onClose(); } },
             h('span', { style: { fontSize: 15 } }, '\uD83D\uDC64'),
@@ -3395,12 +3759,80 @@ function ICalMgr(props) {
 
 // ── MAIN APP ─────────────────────────────────────────────────────────────────
 // ── PENSION SETTINGS (nume + fotografie generala) ───────────────────────────
-// Fotografia e redimensionata client-side si salvata ca Base64 in Firebase Realtime DB
-// (nu avem Firebase Storage activ) — de aceea o limitam la o latura maxima rezonabila
-// ca sa nu depasim limitele de marime ale unei valori din DB.
+// Fotografia principala (pensionPhoto) e redimensionata client-side si salvata ca Base64
+// in Firebase Realtime DB (istoric, dinainte de Storage) — o limitam la o latura maxima
+// rezonabila ca sa nu depasim limitele de marime ale unei valori din DB.
 var PENSION_PHOTO_MAX_DIM = 1280; // px, latura cea mai mare dupa resize
 var PENSION_PHOTO_QUALITY = 0.78; // calitate JPEG la export
 var PENSION_PHOTO_MAX_BYTES = 700 * 1024; // ~700KB prag de avertizare (Base64 e ~33% mai mare ca originalul)
+
+// Galeria de prezentare (pana la 10 poze) foloseste Firebase STORAGE (fisiere reale, nu
+// Base64 in DB) — 2 marimi per poza, generate client-side inainte de upload:
+// - thumb: grila de previzualizare, incarcare rapida pe mobil
+// - full: vizualizare marita la click
+// Tinta: ~3-4MB total pentru toate cele 10 poze (ambele marimi), mult sub nivelul gratuit
+// Firebase Storage (5GB).
+var GALLERY_MAX_PHOTOS = 10;
+var GALLERY_THUMB_DIM = 400; var GALLERY_THUMB_QUALITY = 0.7;
+var GALLERY_FULL_DIM = 1600; var GALLERY_FULL_QUALITY = 0.8;
+
+// Redimensioneaza o imagine la o latura maxima data, intoarce un Blob JPEG (pentru upload
+// in Storage) — spre deosebire de resizeImageToBase64 (care intoarce text, pentru DB).
+function resizeImageToBlob(file, maxDim, quality) {
+  return new Promise(function(resolve, reject) {
+    if (!file) { reject(new Error('Niciun fisier selectat')); return; }
+    if (!/^image\//.test(file.type)) { reject(new Error('Fisierul trebuie sa fie o imagine (jpg, png, webp)')); return; }
+    var reader = new FileReader();
+    reader.onerror = function() { reject(new Error('Nu am putut citi fisierul')); };
+    reader.onload = function(e) {
+      var img = new Image();
+      img.onerror = function() { reject(new Error('Fisierul nu e o imagine valida')); };
+      img.onload = function() {
+        var w = img.width, h = img.height;
+        var scale = Math.min(1, maxDim / Math.max(w, h));
+        var tw = Math.round(w * scale), th = Math.round(h * scale);
+        var canvas = document.createElement('canvas');
+        canvas.width = tw; canvas.height = th;
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, tw, th);
+        canvas.toBlob(function(blob) {
+          if (!blob) { reject(new Error('Nu am putut procesa imaginea')); return; }
+          resolve(blob);
+        }, 'image/jpeg', quality);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// Incarca o poza noua in galerie: genereaza thumb+full, le urca in Firebase Storage sub
+// pensions/{id}/gallery/{photoId}_thumb.jpg si _full.jpg, intoarce URL-urile publice.
+function uploadGalleryPhoto(file, pensionId) {
+  var photoId = 'g' + Date.now() + Math.random().toString(36).slice(2, 8);
+  var storage = firebase.storage();
+  return Promise.all([
+    resizeImageToBlob(file, GALLERY_THUMB_DIM, GALLERY_THUMB_QUALITY),
+    resizeImageToBlob(file, GALLERY_FULL_DIM, GALLERY_FULL_QUALITY)
+  ]).then(function(blobs) {
+    var thumbRef = storage.ref('pensions/' + pensionId + '/gallery/' + photoId + '_thumb.jpg');
+    var fullRef = storage.ref('pensions/' + pensionId + '/gallery/' + photoId + '_full.jpg');
+    return Promise.all([
+      thumbRef.put(blobs[0]).then(function() { return thumbRef.getDownloadURL(); }),
+      fullRef.put(blobs[1]).then(function() { return fullRef.getDownloadURL(); })
+    ]);
+  }).then(function(urls) {
+    return { id: photoId, thumbUrl: urls[0], fullUrl: urls[1] };
+  });
+}
+
+function deleteGalleryPhoto(photo, pensionId) {
+  var storage = firebase.storage();
+  return Promise.all([
+    storage.ref('pensions/' + pensionId + '/gallery/' + photo.id + '_thumb.jpg').delete().catch(function(){}),
+    storage.ref('pensions/' + pensionId + '/gallery/' + photo.id + '_full.jpg').delete().catch(function(){})
+  ]);
+}
 
 function resizeImageToBase64(file) {
   return new Promise(function(resolve, reject) {
@@ -3534,7 +3966,162 @@ function PensionSettings(props) {
   );
 }
 
-// ── ACCOUNT SETTINGS (email, schimbare parola, logout) ──────────────────────
+// ── EDITOR PAGINA DE PREZENTARE PUBLICA (galerie, descriere, facilitati, date legale) ──
+function PresentationEditor(props) {
+  var p = props.presentation || {};
+  var ds = useState(p.description || ''); var description = ds[0], setDescription = ds[1];
+  var cps = useState(p.contactPhone || ''); var contactPhone = cps[0], setContactPhone = cps[1];
+  var ces = useState(p.contactEmail || ''); var contactEmail = ces[0], setContactEmail = ces[1];
+  var sts = useState(p.structureType || 'Pensiune'); var structureType = sts[0], setStructureType = sts[1];
+  var mls = useState(p.mapLink || ''); var mapLink = mls[0], setMapLink = mls[1];
+  var cis = useState(p.checkInTime || '14:00'); var checkInTime = cis[0], setCheckInTime = cis[1];
+  var cos = useState(p.checkOutTime || '11:00'); var checkOutTime = cos[0], setCheckOutTime = cos[1];
+  var ccs = useState(p.classificationCert || ''); var classificationCert = ccs[0], setClassificationCert = ccs[1];
+  var sis = useState(p.siturId || ''); var siturId = sis[0], setSiturId = sis[1];
+  var ams = useState(p.amenities || {}); var amenities = ams[0], setAmenities = ams[1];
+  var gls = useState(p.gallery || []); var gallery = gls[0], setGallery = gls[1];
+  var ups = useState(false); var uploading = ups[0], setUploading = ups[1];
+  var ues = useState(''); var uploadErr = ues[0], setUploadErr = ues[1];
+  var svs = useState(false); var saving = svs[0], setSaving = svs[1];
+  var ers = useState(''); var err = ers[0], setErr = ers[1];
+
+  function toggleAmenity(id) {
+    setAmenities(Object.assign({}, amenities, { [id]: !amenities[id] }));
+  }
+
+  function handleFiles(e) {
+    var files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!files.length) return;
+    var room = GALLERY_MAX_PHOTOS - gallery.length;
+    if (room <= 0) { setUploadErr('Ai atins limita de ' + GALLERY_MAX_PHOTOS + ' poze. Sterge una ca sa adaugi alta.'); return; }
+    var toUpload = files.slice(0, room);
+    setUploadErr(''); setUploading(true);
+
+    var chain = Promise.resolve();
+    var uploaded = [];
+    toUpload.forEach(function(file) {
+      chain = chain.then(function() { return uploadGalleryPhoto(file, PENSION_ID); }).then(function(photo) { uploaded.push(photo); });
+    });
+    chain.then(function() {
+      setGallery(gallery.concat(uploaded));
+      setUploading(false);
+      if (files.length > toUpload.length) setUploadErr('Doar primele ' + toUpload.length + ' poze au fost incarcate (limita de ' + GALLERY_MAX_PHOTOS + ').');
+    }).catch(function(e) {
+      setUploading(false);
+      setUploadErr('Eroare la incarcare: ' + e.message);
+    });
+  }
+
+  function removePhoto(photo) {
+    setGallery(gallery.filter(function(g) { return g.id !== photo.id; }));
+    deleteGalleryPhoto(photo, PENSION_ID).catch(function() {});
+  }
+
+  function handleSave() {
+    setErr(''); setSaving(true);
+    var data = {
+      description: description.trim(), contactPhone: contactPhone.trim(), contactEmail: contactEmail.trim(),
+      structureType: structureType, mapLink: mapLink.trim(), checkInTime: checkInTime, checkOutTime: checkOutTime,
+      classificationCert: classificationCert.trim(), siturId: siturId.trim(),
+      amenities: amenities, gallery: gallery
+    };
+    props.onSave(data).then(function() { setSaving(false); props.onClose(); })
+      .catch(function(e) { setSaving(false); setErr('Eroare la salvare: ' + e.message); });
+  }
+
+  return h('div', { className: 'ov', onClick: props.onClose },
+    h('div', { className: 'mdl', onClick: function(e) { e.stopPropagation(); } },
+      h('div', { className: 'mhdr' },
+        h('span', { className: 'mtit' }, '\uD83C\uDF10 Pagina de prezentare'),
+        h('button', { className: 'mclose', onClick: props.onClose }, '\u2715')
+      ),
+      h('div', { className: 'mbody' },
+        err && h('div', { style: { background: '#fef2f2', border: '1.5px solid #fecaca', color: '#dc2626', borderRadius: 9, padding: '10px 14px', marginBottom: 14, fontSize: 13, fontWeight: 600 } }, err),
+
+        h('div', { className: 'ibox', style: { marginBottom: 16 } },
+          'Aceste informatii apar pe pagina publica de prezentare a pensiunii, accesibila oricui are link-ul (Configurare \u2192 Preturi \u2192 tab Link).'
+        ),
+
+        // ── GALERIE FOTO ──
+        h('div', { style: { fontSize: 15, fontWeight: 800, color: '#1e3a5f', marginBottom: 10 } }, '\uD83D\uDCF7 Galerie foto (' + gallery.length + '/' + GALLERY_MAX_PHOTOS + ')'),
+        h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(84px, 1fr))', gap: 8, marginBottom: 10 } },
+          gallery.map(function(photo) {
+            return h('div', { key: photo.id, style: { position: 'relative', aspectRatio: '1', borderRadius: 10, overflow: 'hidden', border: '1.5px solid #e2e8f0' } },
+              h('img', { src: photo.thumbUrl, style: { width: '100%', height: '100%', objectFit: 'cover', display: 'block' } }),
+              h('button', {
+                style: { position: 'absolute', top: 4, right: 4, width: 24, height: 24, borderRadius: 7, background: 'rgba(220,38,38,.9)', color: '#fff', border: 'none', fontSize: 13, cursor: 'pointer' },
+                onClick: function() { removePhoto(photo); }
+              }, '\u2715')
+            );
+          }),
+          gallery.length < GALLERY_MAX_PHOTOS && h('label', {
+            style: { aspectRatio: '1', borderRadius: 10, border: '2px dashed #94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b', fontSize: 24 }
+          }, uploading ? '\u23F3' : '+', h('input', { type: 'file', accept: 'image/*', multiple: true, style: { display: 'none' }, onChange: handleFiles, disabled: uploading }))
+        ),
+        uploadErr && h('div', { style: { fontSize: 12.5, color: '#dc2626', marginBottom: 14 } }, uploadErr),
+        h('div', { style: { fontSize: 11.5, color: '#94a3b8', marginBottom: 20 } }, 'Pozele se redimensioneaza automat la incarcare — nu ocupa spatiu inutil.'),
+
+        // ── DESCRIERE ──
+        h(Field, { lbl: 'Descriere pensiune' },
+          h('textarea', { className: 'finp', rows: 4, style: { resize: 'vertical' }, placeholder: 'Povesteste pe scurt ce ofera pensiunea ta...', value: description, onChange: function(e) { setDescription(e.target.value); } })
+        ),
+
+        h('div', { className: 'fgrid' },
+          h(Field, { lbl: 'Tip structura' },
+            h('select', { className: 'finp', value: structureType, onChange: function(e) { setStructureType(e.target.value); } },
+              STRUCTURE_TYPES.map(function(t) { return h('option', { key: t, value: t }, t); })
+            )
+          ),
+          h(Field, { lbl: 'Link Google Maps' }, h('input', { className: 'finp', placeholder: 'https://maps.google.com/...', value: mapLink, onChange: function(e) { setMapLink(e.target.value); } }))
+        ),
+
+        // ── CONTACT ──
+        h('div', { className: 'fgrid' },
+          h(Field, { lbl: 'Telefon contact' }, h('input', { className: 'finp', placeholder: '07xx xxx xxx', value: contactPhone, onChange: function(e) { setContactPhone(e.target.value); } })),
+          h(Field, { lbl: 'Email contact' }, h('input', { className: 'finp', type: 'email', placeholder: 'contact@pensiune.ro', value: contactEmail, onChange: function(e) { setContactEmail(e.target.value); } }))
+        ),
+
+        // ── ORE CHECK-IN/OUT ──
+        h('div', { className: 'fgrid' },
+          h(Field, { lbl: 'Ora check-in' }, h('input', { className: 'finp', type: 'time', value: checkInTime, onChange: function(e) { setCheckInTime(e.target.value); } })),
+          h(Field, { lbl: 'Ora check-out' }, h('input', { className: 'finp', type: 'time', value: checkOutTime, onChange: function(e) { setCheckOutTime(e.target.value); } }))
+        ),
+
+        // ── FACILITATI ──
+        h('div', { style: { fontSize: 15, fontWeight: 800, color: '#1e3a5f', margin: '18px 0 10px' } }, '\u2728 Facilitati'),
+        h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 20 } },
+          AMENITIES_LIST.map(function(a) {
+            var active = !!amenities[a.id];
+            return h('div', {
+              key: a.id, onClick: function() { toggleAmenity(a.id); },
+              style: { display: 'flex', alignItems: 'center', gap: 7, padding: '9px 10px', borderRadius: 9, cursor: 'pointer', background: active ? '#eff6ff' : '#f8fafc', border: '1.5px solid ' + (active ? '#93c5fd' : '#e2e8f0') }
+            },
+              h('span', { style: { fontSize: 15 } }, a.icon),
+              h('span', { style: { fontSize: 12.5, fontWeight: 600, color: active ? '#1e40af' : '#64748b' } }, a.label)
+            );
+          })
+        ),
+
+        // ── DATE LEGALE (recomandate, nu obligatorii) ──
+        h('div', { style: { fontSize: 15, fontWeight: 800, color: '#1e3a5f', marginBottom: 6 } }, '\uD83D\uDCC4 Date de conformitate (recomandate)'),
+        h('div', { style: { fontSize: 12.5, color: '#94a3b8', marginBottom: 12, lineHeight: 1.5 } },
+          'Din 2026, structurile de cazare trebuie sa aiba o pagina web cu date de identificare si numarul certificatului de clasificare. Aceste campuri nu blocheaza salvarea daca inca nu le ai.'
+        ),
+        h('div', { className: 'fgrid' },
+          h(Field, { lbl: 'Nr. certificat clasificare' }, h('input', { className: 'finp', placeholder: 'ex: 1234/2024', value: classificationCert, onChange: function(e) { setClassificationCert(e.target.value); } })),
+          h(Field, { lbl: 'Cod SITUR / ROeID' }, h('input', { className: 'finp', placeholder: 'optional', value: siturId, onChange: function(e) { setSiturId(e.target.value); } }))
+        )
+      ),
+      h('div', { className: 'mfoot' },
+        h('button', { className: 'mcanc', onClick: props.onClose, disabled: saving }, 'Anuleaza'),
+        h('button', { className: 'msave', onClick: handleSave, disabled: saving || uploading }, saving ? 'Se salveaza...' : '\u2713 Salveaza')
+      )
+    )
+  );
+}
+
+
 // Firebase cere reautentificare recenta pentru operatii sensibile (schimbare parola/email).
 // Daca sesiunea e mai veche, updatePassword arunca auth/requires-recent-login — de aceea
 // cerem parola curenta si reautentificam explicit inainte de orice schimbare.
@@ -3660,30 +4247,7 @@ function AccountSettings(props) {
 // Validare CNP: 13 cifre, cu cifra de control conform algoritmului oficial.
 // Nu blocheaza salvarea daca esueaza — doar avertizeaza, ca sa nu frustram userul
 // pe un caz marginal (CNP strain, format vechi etc).
-function isValidCNP(cnp) {
-  if (!/^\d{13}$/.test(cnp)) return false;
-  var weights = [2, 7, 9, 1, 4, 6, 3, 5, 8, 2, 7, 9];
-  var sum = 0;
-  for (var i = 0; i < 12; i++) sum += parseInt(cnp[i], 10) * weights[i];
-  var ctrl = sum % 11;
-  if (ctrl === 10) ctrl = 1;
-  return ctrl === parseInt(cnp[12], 10);
-}
-
-// Validare CUI: 2-10 cifre, cu cifra de control conform algoritmului ANAF.
-// Acceptam si cu prefix "RO" (platitor de TVA) — il curatam inainte de validare.
-function isValidCUI(cuiRaw) {
-  var cui = (cuiRaw || '').toUpperCase().replace(/^RO/, '').trim();
-  if (!/^\d{2,10}$/.test(cui)) return false;
-  var weights = [7, 5, 3, 2, 1, 7, 5, 3, 2];
-  var digits = cui.slice(0, -1).padStart(9, '0').split('').map(Number);
-  var ctrlDigit = parseInt(cui.slice(-1), 10);
-  var sum = 0;
-  for (var i = 0; i < 9; i++) sum += digits[i] * weights[i];
-  var rest = (sum * 10) % 11;
-  if (rest === 10) rest = 0;
-  return rest === ctrlDigit;
-}
+// NOTA: isValidCNP si isValidCUI sunt definite in helpers.js (partajate cu checkin.html)
 
 function BillingInfo(props) {
   var onSave = props.onSave, onClose = props.onClose;

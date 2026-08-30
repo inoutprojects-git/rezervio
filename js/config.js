@@ -21,6 +21,38 @@ var PLAN_LIMITS = { basic: 1, standard: 3, premium: 10 };
 // Numarul de WhatsApp al administratorului retea, folosit pentru "Contact suport" din meniu
 // si pe ecranul de trial expirat. MODIFICA aici cu numarul real inainte de lansare.
 var SUPPORT_PHONE = '+40700000000';
+
+// Motive predefinite de anulare rezervare (folosite de CancelMdl)
+var CANCEL_REASONS = [
+  'Client a anulat', 'Neprezentare (no-show)', 'Suprarezervare (overbooking)',
+  'Probleme de plata', 'Motive personale gazda', 'Alt motiv'
+];
+
+// Canale de comunicare (folosite de CommLog)
+var COMM_CHANNELS = [
+  { id: 'whatsapp', label: 'WhatsApp', icon: '\uD83D\uDCAC' },
+  { id: 'phone', label: 'Telefon', icon: '\uD83D\uDCDE' },
+  { id: 'sms', label: 'SMS', icon: '\uD83D\uDCF1' },
+  { id: 'email', label: 'Email', icon: '\uD83D\uDCE7' },
+  { id: 'other', label: 'Altul', icon: '\uD83D\uDCDD' }
+];
+
+// Facilitati pentru pagina de prezentare publica (checklist simplu)
+var AMENITIES_LIST = [
+  { id: 'wifi', label: 'WiFi gratuit', icon: '\uD83D\uDCF6' },
+  { id: 'parking', label: 'Parcare', icon: '\uD83D\uDE97' },
+  { id: 'breakfast', label: 'Mic dejun inclus', icon: '\uD83E\uDD50' },
+  { id: 'petsAllowed', label: 'Animale de companie acceptate', icon: '\uD83D\uDC3E' },
+  { id: 'ac', label: 'Aer conditionat', icon: '\u2744\uFE0F' },
+  { id: 'kitchen', label: 'Bucatarie proprie', icon: '\uD83C\uDF73' },
+  { id: 'pool', label: 'Piscina', icon: '\uD83C\uDFCA' },
+  { id: 'bbq', label: 'Gratar / Foisor', icon: '\uD83C\uDF56' },
+  { id: 'garden', label: 'Curte / Gradina', icon: '\uD83C\uDF33' },
+  { id: 'heating', label: 'Incalzire', icon: '\uD83D\uDD25' }
+];
+
+// Tipuri de structura de cazare (afisate pe pagina de prezentare)
+var STRUCTURE_TYPES = ['Pensiune', 'Vila', 'Cabana', 'Apartament', 'Camera de inchiriat', 'Hotel'];
 var PLAN_LABELS = { basic: 'Basic', standard: 'Standard', premium: 'Premium' };
 
 // ── CONSTANTS ──────────────────────────────────────────────────────────────────
