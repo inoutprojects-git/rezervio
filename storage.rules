@@ -1,0 +1,31 @@
+rules_version = '2';
+
+// Reguli Firebase STORAGE — sistem SEPARAT de database.rules.json (Realtime Database).
+// Storage Rules NU pot citi date din Realtime Database (nu exista root.child(...) aici),
+// deci nu putem verifica direct "acest user e owner/staff al ACESTEI pensiuni" ca in
+// database.rules.json. Compromis acceptat: orice cont autentificat NON-anonim (deci un
+// Owner/Staff/Network Admin real, nu un vizitator public de pe booking.html) poate incarca
+// poze in galeria ORICAREI pensiuni, daca cunoaste pensionId-ul (nu e secret — apare in
+// linkurile publice oricum). Risc real, dar minor: cineva ar putea incarca o poza nepotrivita
+// in galeria altei pensiuni — nu expune date personale, nu afecteaza rezervari, usor de
+// sters de proprietarul pensiunii respective. Pentru izolare stricta per-pensiune ar fi
+// nevoie de Custom Claims (necesita Cloud Functions + plan Blaze) — de reconsiderat doar
+// daca acest risc minor devine relevant in practica.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /pensions/{pensionId}/gallery/{fileName} {
+      // Pozele sunt publice — necesare pentru pagina de prezentare (prezentare.html)
+      allow read: if true;
+
+      // Scriere: doar conturi autentificate REAL (nu anonime, ca vizitatorii publici),
+      // fisier sub 5MB, doar imagini.
+      allow write: if request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous'
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+
+      allow delete: if request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+  }
+}

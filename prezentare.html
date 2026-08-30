@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="theme-color" content="#1e3a5f"/>
+<title>Pensiune</title>
+<meta name="description" content="Prezentare pensiune — camere, facilități, rezervare online."/>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:#f0f4f8;color:#1a202c;font-size:16px;line-height:1.55;}
+button,a.btn{font-family:inherit;cursor:pointer;}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+.loading{min-height:100vh;display:flex;align-items:center;justify-content:center;}
+.spin{width:48px;height:48px;border:5px solid #e2e8f0;border-top-color:#2563eb;border-radius:50%;animation:spin 1s linear infinite;}
+.err-wrap{text-align:center;padding:60px 24px;}
+.err-ico{font-size:56px;margin-bottom:14px;}
+
+.hero{position:relative;height:46vh;min-height:280px;max-height:440px;background:linear-gradient(135deg,#1e3a5f,#1d4ed8);overflow:hidden;}
+.hero img{width:100%;height:100%;object-fit:cover;}
+.hero-overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.65),rgba(0,0,0,.05) 50%);display:flex;align-items:flex-end;padding:24px 18px;padding-bottom:max(24px,env(safe-area-inset-bottom));}
+.hero-title{color:#fff;font-size:26px;font-weight:800;letter-spacing:-.3px;text-shadow:0 2px 8px rgba(0,0,0,.3);}
+.hero-type{display:inline-block;background:rgba(255,255,255,.22);color:#fff;font-size:12.5px;font-weight:700;padding:4px 11px;border-radius:20px;margin-bottom:8px;backdrop-filter:blur(4px);}
+
+.wrap{max-width:760px;margin:0 auto;padding:0 16px 100px;}
+.card{background:#fff;border-radius:16px;box-shadow:0 2px 12px rgba(0,0,0,.06);padding:20px;margin-top:-28px;position:relative;z-index:2;margin-bottom:16px;animation:fadeUp .35s ease both;}
+.sec{margin-bottom:24px;}
+.sec-title{font-size:16px;font-weight:800;color:#1e3a5f;margin-bottom:12px;display:flex;align-items:center;gap:7px;}
+.desc-text{font-size:15px;color:#374151;line-height:1.7;white-space:pre-wrap;}
+
+.gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:6px;}
+.gallery img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;cursor:pointer;transition:opacity .15s;}
+.gallery img:active{opacity:.7;}
+
+.amen-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.amen-item{display:flex;align-items:center;gap:8px;padding:9px 11px;background:#f8fafc;border-radius:9px;font-size:13.5px;font-weight:600;color:#374151;}
+
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.info-box{background:#f8fafc;border-radius:11px;padding:13px 15px;}
+.info-lbl{font-size:11px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;}
+.info-val{font-size:15px;font-weight:700;color:#1a202c;}
+
+.contact-row{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #f1f5f9;}
+.contact-row:last-child{border-bottom:none;}
+.contact-ico{font-size:18px;width:26px;text-align:center;flex-shrink:0;}
+.contact-val{font-size:15px;font-weight:700;color:#1a202c;}
+.contact-link{color:#2563eb;text-decoration:none;}
+
+.legal-box{background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:11px;padding:12px 15px;font-size:12.5px;color:#1e40af;line-height:1.6;}
+
+.rooms-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;}
+.room-chip{background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:10px;text-align:center;font-size:13px;font-weight:700;color:#374151;}
+
+.cta-bar{position:fixed;bottom:0;left:0;right:0;background:#fff;box-shadow:0 -4px 16px rgba(0,0,0,.1);padding:12px 16px;padding-bottom:max(12px,env(safe-area-inset-bottom));z-index:10;}
+.cta-btn{display:block;width:100%;max-width:760px;margin:0 auto;padding:16px;background:#2563eb;color:#fff;text-align:center;text-decoration:none;border-radius:13px;font-size:16px;font-weight:800;}
+
+.lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:100;align-items:center;justify-content:center;padding:20px;}
+.lightbox img{max-width:100%;max-height:90vh;border-radius:8px;object-fit:contain;}
+.lightbox-close{position:absolute;top:max(16px,env(safe-area-inset-top));right:16px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.15);color:#fff;border:none;font-size:20px;}
+
+footer{text-align:center;padding:20px;font-size:12px;color:#94a3b8;}
+</style>
+</head>
+<body>
+
+<div id="app"><div class="loading"><div class="spin"></div></div></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+<script src="js/config.js"></script>
+<script src="js/helpers.js"></script>
+
+<script>
+(function() {
+  'use strict';
+  var params = new URLSearchParams(window.location.search);
+  var pensionId = params.get('p');
+  var E = function(id) { return document.getElementById(id); };
+  function escH(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+  function showError(msg) {
+    E('app').innerHTML = '<div class="err-wrap"><div class="err-ico">\u26A0\uFE0F</div><div style="font-size:18px;font-weight:700;color:#dc2626">' + msg + '</div></div>';
+  }
+
+  if (!pensionId) { showError('Link invalid'); return; }
+
+  window.LB = {
+    open: function(url) { E('lb-img').src = url; E('lightbox').style.display = 'flex'; },
+    close: function() { E('lightbox').style.display = 'none'; }
+  };
+
+  function render(cfg) {
+    var pres = cfg.presentation || {};
+    var amenities = pres.amenities || {};
+    var gallery = pres.gallery || [];
+    var name = cfg.pensionName || 'Pensiune';
+    document.title = name + (pres.structureType ? ' — ' + pres.structureType : '');
+    var metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc) metaDesc.setAttribute('content', (pres.description || name).slice(0, 155));
+
+    var heroImg = gallery.length > 0 ? gallery[0].fullUrl : cfg.pensionPhoto;
+
+    var html = '<div class="hero">';
+    html += heroImg ? '<img src="' + heroImg + '">' : '';
+    html += '<div class="hero-overlay"><div>';
+    if (pres.structureType) html += '<div class="hero-type">' + escH(pres.structureType) + '</div><br>';
+    html += '<div class="hero-title">' + escH(name) + '</div>';
+    html += '</div></div></div>';
+
+    html += '<div class="wrap"><div class="card">';
+
+    if (pres.description) {
+      html += '<div class="sec"><div class="sec-title">\uD83D\uDCDD Despre noi</div><div class="desc-text">' + escH(pres.description) + '</div></div>';
+    }
+
+    if (gallery.length > 0) {
+      html += '<div class="sec"><div class="sec-title">\uD83D\uDCF7 Galerie foto</div><div class="gallery">';
+      gallery.forEach(function(g) {
+        html += '<img src="' + g.thumbUrl + '" onclick="LB.open(\'' + g.fullUrl + '\')" loading="lazy">';
+      });
+      html += '</div></div>';
+    }
+
+    var amenEntries = AMENITIES_LIST.filter(function(a) { return amenities[a.id]; });
+    if (amenEntries.length > 0) {
+      html += '<div class="sec"><div class="sec-title">\u2728 Facilit\u0103\u021bi</div><div class="amen-grid">';
+      amenEntries.forEach(function(a) { html += '<div class="amen-item"><span>' + a.icon + '</span><span>' + escH(a.label) + '</span></div>'; });
+      html += '</div></div>';
+    }
+
+    if ((cfg.rooms || []).length > 0) {
+      html += '<div class="sec"><div class="sec-title">\uD83D\uDEAA Camere disponibile (' + cfg.rooms.length + ')</div><div class="rooms-grid">';
+      cfg.rooms.forEach(function(r) { html += '<div class="room-chip">' + escH(r) + '</div>'; });
+      html += '</div></div>';
+    }
+
+    if (pres.checkInTime || pres.checkOutTime) {
+      html += '<div class="sec"><div class="sec-title">\uD83D\uDD52 Program</div><div class="info-grid">';
+      html += '<div class="info-box"><div class="info-lbl">Check-in</div><div class="info-val">' + escH(pres.checkInTime || '-') + '</div></div>';
+      html += '<div class="info-box"><div class="info-lbl">Check-out</div><div class="info-val">' + escH(pres.checkOutTime || '-') + '</div></div>';
+      html += '</div></div>';
+    }
+
+    if (pres.contactPhone || pres.contactEmail || pres.mapLink) {
+      html += '<div class="sec"><div class="sec-title">\uD83D\uDCCD Contact & Locație</div>';
+      if (pres.contactPhone) html += '<div class="contact-row"><span class="contact-ico">\uD83D\uDCDE</span><a class="contact-val contact-link" href="tel:' + escH(pres.contactPhone) + '">' + escH(pres.contactPhone) + '</a></div>';
+      if (pres.contactEmail) html += '<div class="contact-row"><span class="contact-ico">\uD83D\uDCE7</span><a class="contact-val contact-link" href="mailto:' + escH(pres.contactEmail) + '">' + escH(pres.contactEmail) + '</a></div>';
+      if (pres.mapLink) html += '<div class="contact-row"><span class="contact-ico">\uD83D\uDDFA\uFE0F</span><a class="contact-val contact-link" href="' + escH(pres.mapLink) + '" target="_blank" rel="noopener">Vezi pe hart\u0103</a></div>';
+      html += '</div>';
+    }
+
+    if (pres.classificationCert || pres.siturId) {
+      html += '<div class="sec"><div class="legal-box">';
+      if (pres.classificationCert) html += 'Certificat de clasificare nr. <strong>' + escH(pres.classificationCert) + '</strong><br>';
+      if (pres.siturId) html += 'Cod SITUR/ROeID: <strong>' + escH(pres.siturId) + '</strong>';
+      html += '</div></div>';
+    }
+
+    html += '</div></div>';
+    html += '<footer>Pagin\u0103 generat\u0103 prin Rezervio</footer>';
+    html += '<div class="cta-bar"><a class="cta-btn" href="booking.html?p=' + encodeURIComponent(pensionId) + '">\uD83D\uDCC5 Rezerv\u0103 acum</a></div>';
+    html += '<div class="lightbox" id="lightbox" onclick="LB.close()"><button class="lightbox-close" onclick="LB.close()">\u2715</button><img id="lb-img"></div>';
+
+    E('app').innerHTML = html;
+  }
+
+  firebase.initializeApp(firebaseConfig);
+  firebase.auth().signInAnonymously().then(function() {
+    return firebase.database().ref('pensions/' + pensionId + '/config').once('value');
+  }).then(function(snap) {
+    var cfg = snap.val();
+    if (!cfg) { showError('Aceast\u0103 pensiune nu a fost g\u0103sit\u0103.'); return; }
+    render(cfg);
+  }).catch(function(e) {
+    showError('Eroare: ' + e.message);
+  });
+})();
+</script>
+</body>
+</html>

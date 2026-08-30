@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<meta name="theme-color" content="#1e3a5f"/>
+<title>Vizualizare Rezervări</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:#f0f4f8;color:#1a202c;font-size:16px;line-height:1.5;padding-bottom:40px;}
+input,button{font-family:inherit;font-size:16px;-webkit-appearance:none;}
+button{cursor:pointer;border:none;outline:none;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.hdr{background:linear-gradient(135deg,#1e3a5f,#1d4ed8);color:#fff;padding:20px;padding-top:max(20px,env(safe-area-inset-top));text-align:center;}
+.hdr-ico{font-size:38px;margin-bottom:6px;}
+.hdr-title{font-size:20px;font-weight:800;}
+.hdr-sub{font-size:13px;opacity:.75;margin-top:2px;}
+
+.login-wrap{max-width:380px;margin:60px auto;padding:0 20px;}
+.login-card{background:#fff;border-radius:16px;padding:26px 22px;box-shadow:0 4px 20px rgba(0,0,0,.08);}
+.login-card h2{font-size:18px;margin-bottom:16px;color:#1e3a5f;}
+.finp{width:100%;padding:13px;border:2px solid #d1d9e0;border-radius:10px;font-size:16px;margin-bottom:12px;}
+.finp:focus{border-color:#2563eb;outline:none;}
+.btn-login{width:100%;padding:14px;background:#2563eb;color:#fff;border-radius:10px;font-weight:700;font-size:16px;}
+.login-err{color:#dc2626;font-size:13px;margin-bottom:10px;display:none;}
+
+.main{max-width:720px;margin:0 auto;padding:16px 14px 40px;}
+.stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:18px;}
+.stat-card{background:#fff;border-radius:14px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.06);text-align:center;}
+.stat-num{font-size:26px;font-weight:800;color:#1e3a5f;}
+.stat-lbl{font-size:12px;color:#64748b;font-weight:700;text-transform:uppercase;margin-top:2px;}
+
+.sec-title{font-size:15px;font-weight:800;color:#1e3a5f;margin:18px 0 10px;display:flex;align-items:center;gap:6px;}
+.res-card{background:#fff;border-radius:12px;padding:13px 15px;margin-bottom:8px;box-shadow:0 1px 6px rgba(0,0,0,.05);display:flex;justify-content:space-between;align-items:center;gap:10px;}
+.res-name{font-weight:700;font-size:15px;color:#1a202c;}
+.res-sub{font-size:12.5px;color:#64748b;margin-top:2px;}
+.res-badge{font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;flex-shrink:0;}
+.empty{text-align:center;color:#94a3b8;padding:20px 0;font-size:14px;}
+
+.loading{min-height:50vh;display:flex;align-items:center;justify-content:center;}
+.spin{width:44px;height:44px;border:5px solid #e2e8f0;border-top-color:#2563eb;border-radius:50%;animation:spin 1s linear infinite;}
+
+.logout-btn{position:fixed;top:max(16px,env(safe-area-inset-top));right:14px;background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.3);color:#fff;padding:8px 14px;border-radius:9px;font-size:13px;font-weight:700;}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="loading"><div class="spin"></div></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+<script src="js/config.js"></script>
+<script src="js/helpers.js"></script>
+
+<script>
+(function() {
+  'use strict';
+
+  var E = function(id) { return document.getElementById(id); };
+  function escH(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+  firebase.initializeApp(firebaseConfig);
+  var auth = firebase.auth();
+  var db = firebase.database();
+  var reservations = [];
+
+  function renderLogin(errMsg) {
+    E('app').innerHTML =
+      '<div class="hdr"><div class="hdr-ico">\uD83D\uDC41\uFE0F</div><div class="hdr-title">Vizualizare Rezerv\u0103ri</div>' +
+      '<div class="hdr-sub">Acces doar-citire pentru colaboratori</div></div>' +
+      '<div class="login-wrap"><div class="login-card"><h2>Autentificare</h2>' +
+      '<div class="login-err" id="login-err">' + (errMsg || '') + '</div>' +
+      '<input class="finp" id="v-email" type="email" placeholder="Email" autocomplete="email">' +
+      '<input class="finp" id="v-pass" type="password" placeholder="Parola" autocomplete="current-password">' +
+      '<button class="btn-login" onclick="V.login()">Intr\u0103</button></div></div>';
+    if (errMsg) E('login-err').style.display = 'block';
+  }
+
+  window.V = {
+    login: function() {
+      var email = E('v-email').value.trim();
+      var pass = E('v-pass').value;
+      if (!email || !pass) { renderLogin('Completeaz\u0103 email \u0219i parola.'); return; }
+      auth.signInWithEmailAndPassword(email, pass).catch(function(err) {
+        renderLogin('Email sau parol\u0103 incorecte.');
+      });
+    },
+    logout: function() { auth.signOut(); }
+  };
+
+  function renderDashboard(pensionName, rooms) {
+    var today = todayStr();
+    var active = reservations.filter(function(r) { return r.status !== 'cancelled'; });
+    var checkinToday = active.filter(function(r) { return r.checkIn === today; });
+    var checkoutToday = active.filter(function(r) { return addDays(r.checkIn, r.nights || 0) === today; });
+    var staying = active.filter(function(r) { return r.checkIn < today && addDays(r.checkIn, r.nights || 0) > today; });
+    var pending = active.filter(function(r) { return r.pendingConfirmation; });
+    var occupiedRooms = {};
+    staying.concat(checkinToday).forEach(function(r) { occupiedRooms[r.room] = true; });
+    var freeCount = (rooms || []).filter(function(r) { return !occupiedRooms[r]; }).length;
+
+    var html = '<button class="logout-btn" onclick="V.logout()">Ie\u0219ire</button>';
+    html += '<div class="hdr"><div class="hdr-ico">\uD83D\uDC41\uFE0F</div><div class="hdr-title">' + escH(pensionName || 'Pensiune') + '</div><div class="hdr-sub">Vizualizare doar-citire</div></div>';
+    html += '<div class="main">';
+
+    html += '<div class="stat-grid">';
+    html += '<div class="stat-card"><div class="stat-num">' + checkinToday.length + '</div><div class="stat-lbl">Sosesc azi</div></div>';
+    html += '<div class="stat-card"><div class="stat-num">' + checkoutToday.length + '</div><div class="stat-lbl">Pleac\u0103 azi</div></div>';
+    html += '<div class="stat-card"><div class="stat-num">' + staying.length + '</div><div class="stat-lbl">Caza\u021bi acum</div></div>';
+    html += '<div class="stat-card"><div class="stat-num">' + freeCount + '</div><div class="stat-lbl">Camere libere</div></div>';
+    html += '</div>';
+
+    if (pending.length > 0) {
+      html += '<div class="sec-title">\uD83D\uDD14 Cereri \u00een a\u0219teptare (' + pending.length + ')</div>';
+      pending.forEach(function(r) { html += resCard(r, '#fef3c7', '#92400e', 'CERERE'); });
+    }
+
+    html += '<div class="sec-title">\uD83D\uDEAA Sosesc azi</div>';
+    if (checkinToday.length === 0) html += '<div class="empty">Nimeni nu sose\u0219te azi.</div>';
+    checkinToday.forEach(function(r) { html += resCard(r, '#dbeafe', '#1e40af', 'SOSIRE'); });
+
+    html += '<div class="sec-title">\uD83D\uDEAA Pleac\u0103 azi</div>';
+    if (checkoutToday.length === 0) html += '<div class="empty">Nimeni nu pleac\u0103 azi.</div>';
+    checkoutToday.forEach(function(r) { html += resCard(r, '#fee2e2', '#991b1b', 'PLECARE'); });
+
+    html += '<div class="sec-title">\uD83C\uDFE0 Caza\u021bi \u00een prezent</div>';
+    if (staying.length === 0) html += '<div class="empty">Nicio camer\u0103 ocupat\u0103 acum.</div>';
+    staying.forEach(function(r) { html += resCard(r, '#dcfce7', '#166534', 'CAZAT'); });
+
+    html += '</div>';
+    E('app').innerHTML = html;
+  }
+
+  function resCard(r, bg, color, badge) {
+    var name = ((r.firstName || '') + ' ' + (r.lastName || '')).trim() || 'F\u0103r\u0103 nume';
+    var checkOut = addDays(r.checkIn, r.nights || 0);
+    return '<div class="res-card"><div><div class="res-name">' + escH(name) + '</div>' +
+      '<div class="res-sub">' + escH(r.room || '-') + ' \u00B7 ' + fmt(r.checkIn) + ' \u2192 ' + fmt(checkOut) + '</div></div>' +
+      '<span class="res-badge" style="background:' + bg + ';color:' + color + '">' + badge + '</span></div>';
+  }
+
+  auth.onAuthStateChanged(function(user) {
+    if (!user) { renderLogin(); return; }
+
+    db.ref('users/' + user.uid).once('value').then(function(snap) {
+      var udata = snap.val();
+      if (!udata || !udata.pensionId) { renderLogin('Cont f\u0103r\u0103 pensiune asociat\u0103.'); auth.signOut(); return; }
+      var pid = udata.pensionId;
+
+      db.ref('pensions/' + pid + '/config').once('value').then(function(cs) {
+        var cfg = cs.val() || {};
+        db.ref('pensions/' + pid + '/reservations').on('value', function(rs) {
+          var data = rs.val() || {};
+          reservations = Object.keys(data).map(function(id) { return Object.assign({}, data[id], { id: id }); });
+          renderDashboard(cfg.pensionName, cfg.rooms);
+        });
+      });
+    }).catch(function(err) {
+      renderLogin('Eroare la \u00eenc\u0103rcare: ' + err.message);
+    });
+  });
+
+})();
+</script>
+</body>
+</html>

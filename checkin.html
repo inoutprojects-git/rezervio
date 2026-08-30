@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<meta name="theme-color" content="#1e3a5f"/>
+<title>Pre Check-in</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0;}
+html{-webkit-text-size-adjust:100%;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:#f0f4f8;color:#1a202c;font-size:16px;line-height:1.55;padding-bottom:40px;}
+input,select,textarea{font-family:inherit;font-size:16px!important;-webkit-appearance:none;}
+button{cursor:pointer;border:none;outline:none;font-family:inherit;}
+button:active{opacity:.8;transform:scale(.97);}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes pop{0%{transform:scale(.85);opacity:0}70%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}
+
+.hdr{background:linear-gradient(135deg,#1e3a5f,#1d4ed8);color:#fff;text-align:center;padding:24px 20px;padding-top:max(24px,env(safe-area-inset-top));}
+.hdr-ico{font-size:42px;margin-bottom:8px;}
+.hdr-title{font-size:22px;font-weight:800;}
+.hdr-sub{font-size:14px;opacity:.75;margin-top:4px;}
+
+.main{max-width:680px;margin:0 auto;padding:16px 14px 40px;}
+
+.info-card{background:#fff;border-radius:14px;box-shadow:0 2px 10px rgba(0,0,0,.07);padding:16px 18px;margin-bottom:16px;animation:fadeUp .3s ease;}
+.info-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:15px;border-bottom:1px solid #f1f5f9;}
+.info-row:last-child{border-bottom:none;}
+.info-lbl{color:#64748b;font-weight:600;}
+.info-val{font-weight:800;color:#1a202c;}
+
+.ibox{background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:11px;padding:12px 15px;font-size:14px;color:#1e40af;margin-bottom:16px;line-height:1.6;}
+
+.person-card{background:#fff;border-radius:14px;box-shadow:0 2px 10px rgba(0,0,0,.07);margin-bottom:14px;overflow:hidden;animation:fadeUp .25s ease both;}
+.person-hdr{background:#1e3a5f;color:#fff;padding:13px 16px;display:flex;align-items:center;justify-content:space-between;}
+.person-num{font-size:16px;font-weight:800;}
+.person-del{background:rgba(255,255,255,.2);border:none;color:#fff;width:32px;height:32px;border-radius:8px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.person-body{padding:14px 16px;}
+
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:0;}
+.fgrid.full{grid-template-columns:1fr;}
+.fld{display:flex;flex-direction:column;gap:5px;}
+.flbl{font-size:12px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.3px;}
+.req{color:#dc2626;}
+.finp{padding:12px;border:2px solid #d1d9e0;border-radius:10px;font-size:16px;color:#1a202c;background:#fff;width:100%;outline:none;transition:border-color .15s;}
+.finp:focus{border-color:#2563eb;}
+.ferr{font-size:12px;color:#dc2626;font-weight:600;margin-top:2px;}
+
+.btn-add{width:100%;padding:14px;background:#f0fdf4;color:#16a34a;border:2px dashed #86efac;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:16px;display:flex;align-items:center;justify-content:center;gap:8px;}
+.btn-add:active{background:#dcfce7;}
+
+.btn-submit{width:100%;padding:17px;background:#2563eb;color:#fff;border-radius:13px;font-size:17px;font-weight:800;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;}
+.btn-submit:disabled{background:#94a3b8;cursor:not-allowed;}
+
+.loading{min-height:60vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:#64748b;}
+.spin{width:46px;height:46px;border:5px solid #e2e8f0;border-top-color:#2563eb;border-radius:50%;animation:spin 1s linear infinite;}
+
+.success{text-align:center;padding:40px 20px;animation:pop .5s ease;}
+.succ-ico{font-size:80px;margin-bottom:16px;}
+.succ-title{font-size:26px;font-weight:800;color:#16a34a;margin-bottom:10px;}
+.succ-sub{font-size:16px;color:#64748b;line-height:1.65;}
+
+.err-page{text-align:center;padding:40px 20px;}
+
+.bill-toggle{display:flex;align-items:center;gap:12px;background:#fff;border-radius:14px;box-shadow:0 2px 10px rgba(0,0,0,.07);padding:16px 18px;margin-bottom:14px;cursor:pointer;}
+.bill-toggle input[type=checkbox]{width:22px;height:22px;cursor:pointer;accent-color:#2563eb;}
+.bill-lbl{font-size:16px;font-weight:700;color:#1a202c;}
+.bill-sub{font-size:13px;color:#64748b;}
+.bill-body{background:#fff;border-radius:14px;box-shadow:0 2px 10px rgba(0,0,0,.07);padding:16px 18px;margin-bottom:14px;animation:fadeUp .25s ease;}
+.cui-row{display:flex;gap:8px;align-items:flex-start;}
+.cui-btn{padding:12px 14px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+.cui-btn:disabled{background:#94a3b8;}
+.cui-ok{color:#16a34a;font-size:13px;font-weight:700;margin-top:4px;}
+.cui-err{color:#dc2626;font-size:13px;font-weight:700;margin-top:4px;}
+
+.wifi-card{background:#f0fdf4;border:1.5px solid #86efac;border-radius:14px;padding:16px 18px;margin-bottom:16px;}
+.wifi-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;}
+.wifi-lbl{font-size:13px;color:#166534;font-weight:700;}
+.wifi-val{font-size:15px;font-weight:800;color:#14532d;}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-ico">🏡</div>
+  <div class="hdr-title" id="pension-name">Pre Check-in</div>
+  <div class="hdr-sub">Formular de anunțare a sosirii</div>
+</div>
+
+<div id="app" class="main">
+  <div class="loading"><div class="spin"></div><div style="font-size:16px;font-weight:600">Se încarcă...</div></div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+<script src="js/config.js"></script>
+<script src="js/helpers.js"></script>
+
+<script>
+(function() {
+  'use strict';
+
+  var params = new URLSearchParams(window.location.href.split('?')[1] || '');
+  var pensionId = params.get('p');
+  var resId = params.get('r');
+  var db = null;
+  var reservation = null;
+  var pensionConfig = null;
+  var persons = [];
+  var billing = { wantsBilling: false, companyName: '', cui: '', regNo: '', address: '', email: '', cuiValid: null, cuiLoading: false };
+
+  function E(id) { return document.getElementById(id); }
+  function escH(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+  function emptyPerson() {
+    return {
+      fullName: '', birthDate: '', birthPlace: '', citizenship: 'Romana',
+      domicileLocality: '', domicileStreet: '', domicileNumber: '', domicileCountry: 'Romania',
+      cnp: '', idType: 'CI', idSeries: '', idNumber: '', travelPurpose: 'Turism'
+    };
+  }
+
+  if (!pensionId || !resId) {
+    E('app').innerHTML = '<div class="err-page"><div style="font-size:56px;margin-bottom:14px">\u26A0\uFE0F</div><div style="font-size:18px;font-weight:700;color:#dc2626">Link invalid</div><div style="font-size:15px;color:#64748b;margin-top:8px">Contacta\u021bi pensiunea pentru un link valid.</div></div>';
+    return;
+  }
+
+  function render() {
+    var checkOut = addDays(reservation.checkIn, reservation.nights || 0);
+    var html = '';
+
+    html += '<div class="info-card">';
+    html += '<div class="info-row"><span class="info-lbl">Camera</span><span class="info-val">' + escH(reservation.room || '-') + '</span></div>';
+    html += '<div class="info-row"><span class="info-lbl">Check-in</span><span class="info-val">' + fmt(reservation.checkIn) + '</span></div>';
+    html += '<div class="info-row"><span class="info-lbl">Check-out</span><span class="info-val">' + fmt(checkOut) + '</span></div>';
+    html += '<div class="info-row"><span class="info-lbl">Nop\u021bi</span><span class="info-val">' + (reservation.nights || '-') + '</span></div>';
+    html += '</div>';
+
+    if (pensionConfig && (pensionConfig.wifiName || pensionConfig.wifiPass)) {
+      html += '<div class="wifi-card">';
+      html += '<div class="wifi-row"><span class="wifi-lbl">\uD83D\uDCF6 WiFi</span><span class="wifi-val">' + escH(pensionConfig.wifiName || '-') + '</span></div>';
+      html += '<div class="wifi-row"><span class="wifi-lbl">\uD83D\uDD11 Parol\u0103</span><span class="wifi-val">' + escH(pensionConfig.wifiPass || '-') + '</span></div>';
+      html += '</div>';
+    }
+
+    html += '<div class="ibox">\uD83D\uDCCB V\u0103 rug\u0103m s\u0103 completa\u021bi datele pentru <strong>fiecare persoan\u0103</strong> din grup. Informa\u021biile sunt necesare conform H.G. 237/2001.</div>';
+
+    persons.forEach(function(p, i) {
+      var isRo = (p.citizenship || '').toLowerCase().indexOf('roman') === 0;
+      html += '<div class="person-card"><div class="person-hdr"><span class="person-num">\uD83D\uDC64 Persoana ' + (i + 1) + '</span>';
+      if (persons.length > 1) html += '<button class="person-del" onclick="CK.deletePerson(' + i + ')">\u2715</button>';
+      html += '</div><div class="person-body">';
+      html += '<div class="fgrid full" style="margin-bottom:12px"><div class="fld"><label class="flbl">Nume complet <span class="req">*</span></label>';
+      html += '<input class="finp" value="' + escH(p.fullName) + '" placeholder="Prenume Nume" oninput="CK.updatePerson(' + i + ',\'fullName\',this.value)"/></div></div>';
+      html += '<div class="fgrid" style="margin-bottom:12px"><div class="fld"><label class="flbl">Data na\u0219terii</label>';
+      html += '<input class="finp" type="date" value="' + escH(p.birthDate) + '" oninput="CK.updatePerson(' + i + ',\'birthDate\',this.value)"/></div>';
+      html += '<div class="fld"><label class="flbl">Locul na\u0219terii</label>';
+      html += '<input class="finp" value="' + escH(p.birthPlace) + '" placeholder="Ora\u0219" oninput="CK.updatePerson(' + i + ',\'birthPlace\',this.value)"/></div></div>';
+      html += '<div class="fgrid" style="margin-bottom:12px"><div class="fld"><label class="flbl">Cet\u0103\u021benie</label>';
+      html += '<input class="finp" value="' + escH(p.citizenship) + '" oninput="CK.updatePerson(' + i + ',\'citizenship\',this.value)"/></div>';
+      html += '<div class="fld"><label class="flbl">CNP' + (isRo ? ' <span class="req">*</span>' : '') + '</label>';
+      html += '<input class="finp" value="' + escH(p.cnp) + '" maxlength="13" placeholder="13 cifre" oninput="CK.updatePerson(' + i + ',\'cnp\',this.value.replace(/\\D/g,\'\'))"/>';
+      if (isRo && p.cnp && !isValidCNP(p.cnp)) html += '<div class="ferr">CNP invalid</div>';
+      html += '</div></div>';
+      html += '<div class="fgrid" style="margin-bottom:12px"><div class="fld"><label class="flbl">Localitate domiciliu</label>';
+      html += '<input class="finp" value="' + escH(p.domicileLocality) + '" oninput="CK.updatePerson(' + i + ',\'domicileLocality\',this.value)"/></div>';
+      html += '<div class="fld"><label class="flbl">\u021aara</label>';
+      html += '<input class="finp" value="' + escH(p.domicileCountry) + '" oninput="CK.updatePerson(' + i + ',\'domicileCountry\',this.value)"/></div></div>';
+      html += '<div class="fgrid" style="margin-bottom:8px"><div class="fld"><label class="flbl">Tip act identitate</label>';
+      html += '<select class="finp" onchange="CK.updatePerson(' + i + ',\'idType\',this.value)">';
+      html += '<option value="CI"' + (p.idType === 'CI' ? ' selected' : '') + '>Carte de identitate</option>';
+      html += '<option value="Pasaport"' + (p.idType === 'Pasaport' ? ' selected' : '') + '>Pa\u0219aport</option></select></div>';
+      html += '<div class="fld"><label class="flbl">Serie</label>';
+      html += '<input class="finp" value="' + escH(p.idSeries) + '" oninput="CK.updatePerson(' + i + ',\'idSeries\',this.value.toUpperCase())"/></div></div>';
+      html += '<div class="fgrid full"><div class="fld"><label class="flbl">Num\u0103r act</label>';
+      html += '<input class="finp" value="' + escH(p.idNumber) + '" oninput="CK.updatePerson(' + i + ',\'idNumber\',this.value)"/></div></div>';
+      html += '</div></div>';
+    });
+
+    html += '<button class="btn-add" onclick="CK.addPerson()">+ Adaug\u0103 persoan\u0103</button>';
+
+    html += '<div class="bill-toggle" onclick="CK.toggleBilling()">';
+    html += '<input type="checkbox" ' + (billing.wantsBilling ? 'checked' : '') + ' onclick="event.stopPropagation();CK.toggleBilling()">';
+    html += '<div><div class="bill-lbl">\uD83E\uDDFE Doresc factur\u0103 pe firm\u0103</div><div class="bill-sub">Completa\u021bi datele companiei pentru emiterea facturii</div></div></div>';
+
+    if (billing.wantsBilling) {
+      html += '<div class="bill-body">';
+      html += '<div class="fgrid full" style="margin-bottom:12px"><div class="fld"><label class="flbl">Denumire firm\u0103 <span class="req">*</span></label>';
+      html += '<input class="finp" value="' + escH(billing.companyName) + '" placeholder="S.C. Exemplu S.R.L." oninput="CK.updateBilling(\'companyName\',this.value)"/></div></div>';
+      html += '<div class="fgrid" style="margin-bottom:12px"><div class="fld"><label class="flbl">CUI / CIF <span class="req">*</span></label><div class="cui-row">';
+      html += '<input class="finp" value="' + escH(billing.cui) + '" placeholder="RO12345678" oninput="CK.updateBilling(\'cui\',this.value)"/>';
+      html += '<button class="cui-btn" ' + (billing.cuiLoading ? 'disabled' : '') + ' onclick="CK.verifyCUI()">' + (billing.cuiLoading ? '\u23F3' : '\uD83D\uDD0D Verific\u0103') + '</button></div>';
+      if (billing.cuiValid === true) html += '<div class="cui-ok">\u2713 CUI valid — ' + escH(billing.companyName) + '</div>';
+      if (billing.cuiValid === false) html += '<div class="cui-err">\u26A0\uFE0F CUI neg\u0103sit sau invalid</div>';
+      html += '</div><div class="fld"><label class="flbl">Nr. \u00eenregistrare (J...)</label>';
+      html += '<input class="finp" value="' + escH(billing.regNo) + '" placeholder="J40/1234/2020" oninput="CK.updateBilling(\'regNo\',this.value)"/></div></div>';
+      html += '<div class="fgrid full" style="margin-bottom:12px"><div class="fld"><label class="flbl">Adres\u0103 sediu social <span class="req">*</span></label>';
+      html += '<input class="finp" value="' + escH(billing.address) + '" placeholder="Str. Exemplu nr. 1, Bucure\u0219ti" oninput="CK.updateBilling(\'address\',this.value)"/></div></div>';
+      html += '<div class="fgrid full"><div class="fld"><label class="flbl">Email pentru factur\u0103</label>';
+      html += '<input class="finp" type="email" value="' + escH(billing.email) + '" placeholder="facturi@firma.ro" oninput="CK.updateBilling(\'email\',this.value)"/></div></div>';
+      html += '</div>';
+    }
+
+    html += '<div id="form-err" style="display:none;background:#fef2f2;border:1.5px solid #fca5a5;border-radius:10px;padding:12px;font-size:14px;color:#dc2626;margin-bottom:12px;"></div>';
+    html += '<button class="btn-submit" id="btn-submit" onclick="CK.submitForm()">\u2713 Trimite datele</button>';
+
+    E('app').innerHTML = html;
+  }
+
+  window.CK = {
+    updatePerson: function(i, field, val) { persons[i][field] = val; },
+    addPerson: function() { persons.push(emptyPerson()); render(); window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); },
+    deletePerson: function(i) { if (persons.length <= 1) return; persons.splice(i, 1); render(); },
+    toggleBilling: function() { billing.wantsBilling = !billing.wantsBilling; render(); },
+    updateBilling: function(field, val) { billing[field] = val; if (field === 'cui') billing.cuiValid = null; },
+
+    verifyCUI: function() {
+      var cui = billing.cui.replace(/[^0-9]/g, '');
+      if (!cui) return;
+      billing.cuiLoading = true; billing.cuiValid = null;
+      render();
+      fetch('https://webservicesp.anaf.ro/PlatitorTvaRest/api/v8/ws/tva', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([{ cui: parseInt(cui), data: new Date().toISOString().slice(0, 10) }])
+      }).then(function(r) { return r.json(); }).then(function(data) {
+        billing.cuiLoading = false;
+        var found = data && data.found && data.found.length > 0 ? data.found[0] : null;
+        if (found && found.date_generale) {
+          billing.cuiValid = true;
+          var d = found.date_generale;
+          if (!billing.companyName && d.denumire) billing.companyName = d.denumire;
+          if (!billing.address && d.adresa) billing.address = d.adresa;
+        } else {
+          billing.cuiValid = false;
+        }
+        render();
+      }).catch(function() { billing.cuiLoading = false; billing.cuiValid = false; render(); });
+    },
+
+    submitForm: function() {
+      var errors = [];
+      persons.forEach(function(p, i) {
+        if (!p.fullName.trim()) errors.push('Persoana ' + (i + 1) + ': numele este obligatoriu');
+        var isRo = (p.citizenship || '').toLowerCase().indexOf('roman') === 0;
+        if (isRo && p.cnp && !isValidCNP(p.cnp)) errors.push('Persoana ' + (i + 1) + ': CNP invalid');
+      });
+      if (billing.wantsBilling) {
+        if (!billing.companyName.trim()) errors.push('Date firm\u0103: denumirea este obligatorie');
+        if (!billing.cui.trim()) errors.push('Date firm\u0103: CUI-ul este obligatoriu');
+        if (!billing.address.trim()) errors.push('Date firm\u0103: adresa sediului este obligatorie');
+      }
+      var errEl = E('form-err');
+      if (errors.length > 0) { errEl.innerHTML = errors.join('<br>'); errEl.style.display = 'block'; errEl.scrollIntoView({ behavior: 'smooth' }); return; }
+      errEl.style.display = 'none';
+
+      var btn = E('btn-submit');
+      btn.disabled = true; btn.textContent = '\u23F3 Se trimite...';
+
+      var billingData = billing.wantsBilling ? {
+        wantsBilling: true, companyName: billing.companyName, cui: billing.cui,
+        regNo: billing.regNo, address: billing.address, email: billing.email
+      } : null;
+
+      var guestData = { persons: persons, completedOnline: true, completedAt: Date.now(), completedBy: 'client' };
+      if (billingData) guestData.billing = billingData;
+      if (persons.length === 1) {
+        Object.keys(persons[0]).forEach(function(k) { guestData[k] = persons[0][k]; });
+      }
+
+      db.ref('pensions/' + pensionId + '/reservations/' + resId + '/guestDetails').set(guestData)
+        .then(function() {
+          E('app').innerHTML = '<div class="success"><div class="succ-ico">\uD83C\uDF89</div><div class="succ-title">Mul\u021bumim!</div>' +
+            '<div class="succ-sub">Datele au fost transmise cu succes.<br>Ne vedem la check-in!<br><br>' +
+            '<strong>' + fmt(reservation.checkIn) + '</strong> — ' + escH(reservation.room || '') + '</div></div>';
+        }).catch(function(e) {
+          btn.disabled = false; btn.textContent = '\u2713 Trimite datele';
+          errEl.textContent = 'Eroare la trimitere: ' + e.message; errEl.style.display = 'block';
+        });
+    }
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  var auth = firebase.auth();
+
+  auth.signInAnonymously().then(function() {
+    db = firebase.database();
+    return db.ref('pensions/' + pensionId + '/config').once('value');
+  }).then(function(snap) {
+    pensionConfig = snap.val() || {};
+    if (pensionConfig.pensionName) {
+      E('pension-name').textContent = pensionConfig.pensionName;
+      document.title = 'Pre Check-in — ' + pensionConfig.pensionName;
+    }
+    return db.ref('pensions/' + pensionId + '/reservations/' + resId).once('value');
+  }).then(function(snap) {
+    var data = snap.val();
+    if (!data) {
+      E('app').innerHTML = '<div class="err-page"><div style="font-size:56px;margin-bottom:14px">\uD83D\uDD0D</div><div style="font-size:18px;font-weight:700;color:#dc2626">Rezervare negasit\u0103</div></div>';
+      return;
+    }
+    reservation = data;
+    if (data.guestDetails) {
+      if (data.guestDetails.persons && data.guestDetails.persons.length > 0) {
+        persons = data.guestDetails.persons;
+      } else if (data.guestDetails.fullName) {
+        persons = [Object.assign(emptyPerson(), data.guestDetails)];
+      } else {
+        persons = [emptyPerson()];
+      }
+    } else {
+      var first = emptyPerson();
+      first.fullName = ((data.firstName || '') + ' ' + (data.lastName || '')).trim();
+      persons = [first];
+    }
+    render();
+  }).catch(function(e) {
+    E('app').innerHTML = '<div class="err-page"><div style="font-size:48px;margin-bottom:14px">\u26A0\uFE0F</div><div style="font-size:16px;color:#dc2626">' + e.message + '</div></div>';
+  });
+
+})();
+</script>
+</body>
+</html>

@@ -52,11 +52,30 @@
           ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (root.child('users').child(auth.uid).child('pensionId').val() === $pensionId && (root.child('users').child(auth.uid).child('role').val() === 'owner' || root.child('users').child(auth.uid).child('role').val() === 'staff')))"
         },
 
+        "blockedDates": {
+          ".read": "auth != null",
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (root.child('users').child(auth.uid).child('pensionId').val() === $pensionId && (root.child('users').child(auth.uid).child('role').val() === 'owner' || root.child('users').child(auth.uid).child('role').val() === 'staff')))",
+          "$blockId": {
+            ".write": "auth != null && ((root.child('users').child(auth.uid).child('role').val() === 'network_admin') || (root.child('users').child(auth.uid).child('pensionId').val() === $pensionId && (root.child('users').child(auth.uid).child('role').val() === 'owner' || root.child('users').child(auth.uid).child('role').val() === 'staff')) || !data.exists())"
+          }
+        },
+
         "reservations": {
           ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (root.child('users').child(auth.uid).child('pensionId').val() === $pensionId && (root.child('users').child(auth.uid).child('role').val() === 'owner' || root.child('users').child(auth.uid).child('role').val() === 'staff')))",
 
           "$resId": {
-            ".write": "auth != null && ((root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (root.child('users').child(auth.uid).child('pensionId').val() === $pensionId && (root.child('users').child(auth.uid).child('role').val() === 'owner' || root.child('users').child(auth.uid).child('role').val() === 'staff'))) || (!data.exists() && newData.child('pendingConfirmation').val() === true && newData.child('source').val() === 'Site Rezervari'))"
+            ".read": "auth != null",
+            ".write": "auth != null && ((root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (root.child('users').child(auth.uid).child('pensionId').val() === $pensionId && (root.child('users').child(auth.uid).child('role').val() === 'owner' || root.child('users').child(auth.uid).child('role').val() === 'staff'))) || (!data.exists() && newData.child('pendingConfirmation').val() === true && newData.child('source').val() === 'Site Rezervari'))",
+
+            "guestDetails": {
+              ".write": "auth != null && ((root.child('users').child(auth.uid).child('role').val() === 'network_admin') || (root.child('users').child(auth.uid).child('pensionId').val() === $pensionId && (root.child('users').child(auth.uid).child('role').val() === 'owner' || root.child('users').child(auth.uid).child('role').val() === 'staff')) || root.child('pensions').child($pensionId).child('reservations').child($resId).child('checkIn').exists())"
+            },
+            "billingDetails": {
+              ".write": "auth != null && ((root.child('users').child(auth.uid).child('role').val() === 'network_admin') || (root.child('users').child(auth.uid).child('pensionId').val() === $pensionId && (root.child('users').child(auth.uid).child('role').val() === 'owner' || root.child('users').child(auth.uid).child('role').val() === 'staff')) || root.child('pensions').child($pensionId).child('reservations').child($resId).child('checkIn').exists())"
+            },
+            "commLog": {
+              ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'network_admin' || (root.child('users').child(auth.uid).child('pensionId').val() === $pensionId && (root.child('users').child(auth.uid).child('role').val() === 'owner' || root.child('users').child(auth.uid).child('role').val() === 'staff')))"
+            }
           }
         },
 
